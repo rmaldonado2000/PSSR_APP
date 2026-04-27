@@ -1,0 +1,68 @@
+{
+  "version": "1.0",
+  "appId": "b4a955d5-cc79-45b7-ab95-742ee77650dd",
+  "appDisplayName": "PSSR_App",
+  "region": "prod",
+  "environmentId": "9a27d596-85f6-e123-978f-7df4b3f854f2",
+  "description": " ",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:5173",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {
+    "default.cds": {
+      "dataSources": {
+        "pssr_plans": {
+          "entitySetName": "crc07_pssr_plans",
+          "logicalName": "crc07_pssr_plan"
+        },
+        "pssr_checklists": {
+          "entitySetName": "crc07_pssr_checklists",
+          "logicalName": "crc07_pssr_checklist"
+        },
+        "pssr_checklist_questions": {
+          "entitySetName": "crc07_pssr_checklist_questions",
+          "logicalName": "crc07_pssr_checklist_question"
+        },
+        "pssr_deficiencies": {
+          "entitySetName": "crc07_pssr_deficiencies",
+          "logicalName": "crc07_pssr_deficiency"
+        },
+        "pssr_mocs": {
+          "entitySetName": "crc07_pssr_mocs",
+          "logicalName": "crc07_pssr_moc"
+        },
+        "pssr_projects": {
+          "entitySetName": "crc07_pssr_projects",
+          "logicalName": "crc07_pssr_project"
+        },
+        "pssr_tarevisions": {
+          "entitySetName": "crc07_pssr_tarevisions",
+          "logicalName": "crc07_pssr_tarevision"
+        },
+        "pssr_team_members": {
+          "entitySetName": "crc07_pssr_team_members",
+          "logicalName": "crc07_pssr_team_member"
+        },
+        "pssr_template_checklists": {
+          "entitySetName": "crc07_pssr_template_checklists",
+          "logicalName": "crc07_pssr_template_checklist"
+        },
+        "pssr_template_questions": {
+          "entitySetName": "crc07_pssr_template_questions",
+          "logicalName": "crc07_pssr_template_question"
+        },
+        "pssr_approvals": {
+          "entitySetName": "crc07_pssr_approvals",
+          "logicalName": "crc07_pssr_approval"
+        },
+        "users": {
+          "entitySetName": "systemusers",
+          "logicalName": "systemuser"
+        }
+      },
+      "environmentVariableName": ""
+    }
+  }
+}

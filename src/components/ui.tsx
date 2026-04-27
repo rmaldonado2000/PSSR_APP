@@ -1,0 +1,527 @@
+import {
+  Badge,
+  Body1,
+  Button,
+  type ButtonProps,
+  Caption1,
+  Card,
+  Divider,
+  makeStyles,
+  mergeClasses,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+  Subtitle2,
+  tokens,
+} from '@fluentui/react-components';
+import { Dismiss24Regular } from '@fluentui/react-icons';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactElement, type ReactNode } from 'react';
+import type { SemanticBadgeColor, SemanticTone } from '../app/semanticColors';
+import { List } from 'react-window';
+
+const useStyles = makeStyles({
+  pageSection: {
+    display: 'grid',
+    gap: tokens.spacingVerticalL,
+  },
+  stateBox: {
+    minHeight: '220px',
+    display: 'grid',
+    placeItems: 'center',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingHorizontalXL,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  chip: {
+    textTransform: 'capitalize',
+  },
+  responsiveButton: {
+    whiteSpace: 'nowrap',
+    minWidth: 'fit-content',
+    maxWidth: '100%',
+  },
+  responsiveButtonLabel: {
+    whiteSpace: 'nowrap',
+    '@media (max-width: 700px)': {
+      display: 'none',
+    },
+  },
+  galleryListItem: {
+    boxSizing: 'border-box',
+    minWidth: 0,
+  },
+  galleryListItemInset: {
+    paddingLeft: tokens.spacingHorizontalXS,
+    paddingRight: tokens.spacingHorizontalXS,
+    '@media (max-width: 700px)': {
+      paddingLeft: 0,
+      paddingRight: 0,
+    },
+  },
+  rowCard: {
+    cursor: 'pointer',
+    outlineOffset: '2px',
+    borderLeftWidth: '5px',
+    borderLeftStyle: 'solid',
+    ':focus-visible': {
+      outline: `2px solid ${tokens.colorCompoundBrandStroke}`,
+    },
+    '@media (max-width: 700px)': {
+      borderRadius: tokens.borderRadiusMedium,
+    },
+  },
+  rowCardBody: {
+    display: 'grid',
+    gap: tokens.spacingVerticalXS,
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingVerticalXXS,
+    },
+  },
+  rowCardTopRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: tokens.spacingHorizontalS,
+    flexWrap: 'wrap',
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingHorizontalXS,
+    },
+  },
+  rowCardTitleGroup: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: tokens.spacingHorizontalS,
+    minWidth: 0,
+    flex: '1 1 240px',
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingHorizontalXS,
+      flexBasis: '180px',
+    },
+  },
+  rowCardIcon: {
+    display: 'grid',
+    placeItems: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground2,
+    flexShrink: 0,
+    '@media (max-width: 700px)': {
+      width: '28px',
+      height: '28px',
+    },
+  },
+  rowCardText: {
+    display: 'grid',
+    gap: tokens.spacingVerticalXXS,
+    minWidth: 0,
+  },
+  rowCardTitle: {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  rowCardSubtitle: {
+    color: tokens.colorNeutralForeground3,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  rowCardBadges: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalXS,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingHorizontalXXS,
+    },
+  },
+  rowCardMetaList: {
+    display: 'grid',
+    gap: tokens.spacingVerticalXXS,
+  },
+  rowCardMetaField: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalXXS,
+    alignItems: 'baseline',
+    color: tokens.colorNeutralForeground2,
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  rowCardMetaLabel: {
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+  },
+  rowCardMetaText: {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  listShell: {
+    display: 'grid',
+    gridTemplateRows: 'minmax(0, 1fr) auto',
+    height: '100%',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    overflow: 'hidden',
+    backgroundColor: tokens.colorNeutralBackground1,
+    minHeight: 0,
+  },
+  stackedListContent: {
+    display: 'grid',
+    alignContent: 'start',
+    minHeight: 0,
+    height: '100%',
+    padding: '2px 0',
+    overflowY: 'auto',
+  },
+  listFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  panelHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+});
+
+export function SectionPanel(props: {
+  title?: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}): ReactNode {
+  const styles = useStyles();
+  const hasHeader = Boolean(props.title || props.description || props.action);
+  return (
+    <Card className={mergeClasses(styles.pageSection, props.className)}>
+      {hasHeader && (
+        <>
+          <div className={styles.panelHeader}>
+            <div>
+              {props.title && <Subtitle2>{props.title}</Subtitle2>}
+              {props.description && <Caption1 block style={{ marginTop: tokens.spacingVerticalXXS }}>{props.description}</Caption1>}
+            </div>
+            {props.action}
+          </div>
+          <Divider />
+        </>
+      )}
+      {props.children}
+    </Card>
+  );
+}
+
+export function StatusChip(props: {
+  value?: string;
+  appearance?: 'filled' | 'outline' | 'tint';
+  color?: SemanticBadgeColor;
+  icon?: ReactElement;
+  tone?: SemanticTone;
+}): ReactNode {
+  const styles = useStyles();
+  return (
+    <Badge
+      className={styles.chip}
+      appearance={props.appearance ?? 'tint'}
+      color={props.tone ? undefined : (props.color ?? 'informative')}
+      icon={props.icon}
+      style={props.tone ? {
+        backgroundColor: props.tone.chipBackgroundColor,
+        color: props.tone.chipForegroundColor,
+        borderColor: props.tone.accentColor,
+        borderStyle: 'solid',
+        borderWidth: '1px',
+      } : undefined}
+    >
+      {props.value ?? 'N/A'}
+    </Badge>
+  );
+}
+
+export function DataState(props: {
+  loading: boolean;
+  error?: string;
+  empty: boolean;
+  emptyTitle: string;
+  emptyBody?: string;
+  children: ReactNode;
+}): ReactNode {
+  const styles = useStyles();
+
+  if (props.loading) {
+    return (
+      <div className={styles.stateBox}>
+        <Spinner label="Loading records from Dataverse..." />
+      </div>
+    );
+  }
+
+  if (props.error) {
+    return (
+      <MessageBar intent="error">
+        <MessageBarBody>
+          <MessageBarTitle>Something went wrong</MessageBarTitle>
+          {props.error}
+        </MessageBarBody>
+      </MessageBar>
+    );
+  }
+
+  if (props.empty) {
+    return (
+      <div className={styles.stateBox}>
+        <div>
+          <Subtitle2>{props.emptyTitle}</Subtitle2>
+          <Caption1>{props.emptyBody ?? 'Create records or adjust filters to continue.'}</Caption1>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{props.children}</>;
+}
+
+export function VirtualizedList<T>(props: {
+  items: T[];
+  rowHeight: number;
+  height?: number;
+  fillHeight?: boolean;
+  row: (item: T, index: number) => ReactNode;
+  footer?: ReactNode;
+  layout?: 'virtual' | 'stack';
+  gap?: string;
+}): ReactNode {
+  const styles = useStyles();
+  const shellRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [fillListHeight, setFillListHeight] = useState<number>(0);
+
+  type RowData = {
+    items: T[];
+    renderItem: (item: T, index: number) => ReactNode;
+  };
+
+  const RowComponent = ({ index, style, items, renderItem }: {
+    index: number;
+    style: CSSProperties;
+    items: T[];
+    renderItem: (item: T, index: number) => ReactNode;
+  }): ReactElement => {
+    return <div style={style}>{renderItem(items[index] as T, index)}</div>;
+  };
+
+  useEffect(() => {
+    if (!props.fillHeight) {
+      return undefined;
+    }
+
+    const shell = shellRef.current;
+    if (!shell || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+
+    const updateHeight = () => {
+      const shellHeight = shell.clientHeight;
+      const footerHeight = footerRef.current?.offsetHeight ?? 0;
+      setFillListHeight(Math.max(0, shellHeight - footerHeight));
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    observer.observe(shell);
+    if (footerRef.current) {
+      observer.observe(footerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [props.fillHeight, props.footer]);
+
+  const effectiveHeight = props.fillHeight ? fillListHeight : props.height;
+  const isStackLayout = props.layout === 'stack';
+
+  const content = isStackLayout ? (
+    <div
+      className={styles.stackedListContent}
+      style={{ gap: props.gap ?? '4px' }}
+    >
+      {props.items.map((item, index) => (
+        <div key={index}>{props.row(item, index)}</div>
+      ))}
+    </div>
+  ) : effectiveHeight ? (
+    <List<RowData>
+      rowCount={props.items.length}
+      rowHeight={props.rowHeight}
+      rowComponent={RowComponent as never}
+      rowProps={{ items: props.items, renderItem: props.row }}
+      overscanCount={5}
+      style={{ height: effectiveHeight, width: '100%' }}
+    />
+  ) : (
+    <div>
+      {props.items.map((item, index) => (
+        <div key={index}>{props.row(item, index)}</div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div ref={shellRef} className={styles.listShell}>
+      {content}
+      <div ref={footerRef} className={styles.listFooter}>
+        <Body1>{props.items.length} records</Body1>
+        {props.footer}
+      </div>
+    </div>
+  );
+}
+
+export function GalleryListItem(props: {
+  children: ReactNode;
+  inset?: boolean;
+}): ReactNode {
+  const styles = useStyles();
+
+  return (
+    <div className={mergeClasses(styles.galleryListItem, props.inset && styles.galleryListItemInset)}>
+      {props.children}
+    </div>
+  );
+}
+
+export function ResponsiveButton(props: {
+  label: string;
+  icon: ReactElement;
+  ariaLabel?: string;
+  appearance?: ButtonProps['appearance'];
+  className?: string;
+  disabled?: boolean;
+  iconPosition?: ButtonProps['iconPosition'];
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  size?: ButtonProps['size'];
+  title?: string;
+  type?: 'button' | 'submit' | 'reset';
+}): ReactNode {
+  const styles = useStyles();
+  const {
+    appearance,
+    ariaLabel,
+    className,
+    disabled,
+    icon,
+    iconPosition,
+    label,
+    onClick,
+    size,
+    type,
+    title,
+  } = props;
+
+  return (
+    <Button
+      as="button"
+      appearance={appearance}
+      className={mergeClasses(styles.responsiveButton, className)}
+      disabled={disabled}
+      icon={icon}
+      iconPosition={iconPosition}
+      aria-label={ariaLabel ?? label}
+      onClick={onClick}
+      size={size}
+      type={type}
+      title={title}
+    >
+      <span className={styles.responsiveButtonLabel}>{label}</span>
+    </Button>
+  );
+}
+
+export function RowCard(props: {
+  title: string;
+  subtitle?: string;
+  onClick?: () => void;
+  right?: ReactElement;
+  details?: ReactNode;
+  icon?: ReactElement;
+  accentColor?: string;
+  badges?: ReactNode;
+  meta?: Array<{ label: string; value?: ReactNode }>;
+}): ReactNode {
+  const styles = useStyles();
+  return (
+    <Card
+      className={styles.rowCard}
+      style={{ borderLeftColor: props.accentColor ?? tokens.colorNeutralStroke2 }}
+      onClick={props.onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          props.onClick?.();
+        }
+      }}
+      tabIndex={0}
+      appearance="filled-alternative"
+      size="small"
+    >
+      <div className={styles.rowCardBody}>
+        <div className={styles.rowCardTopRow}>
+          <div className={styles.rowCardTitleGroup}>
+            {props.icon ? <div className={styles.rowCardIcon}>{props.icon}</div> : null}
+            <div className={styles.rowCardText}>
+              <Subtitle2 className={styles.rowCardTitle}>{props.title}</Subtitle2>
+              {props.subtitle ? <Caption1 className={styles.rowCardSubtitle}>{props.subtitle}</Caption1> : null}
+            </div>
+          </div>
+          {props.badges ? <div className={styles.rowCardBadges}>{props.badges}</div> : props.right}
+        </div>
+        {props.meta?.length ? (
+          <div className={styles.rowCardMetaList}>
+            {props.meta.map((field) => (
+              <span key={field.label} className={styles.rowCardMetaField}>
+                <Caption1 className={styles.rowCardMetaLabel}>{field.label}:</Caption1>
+                <Caption1 className={styles.rowCardMetaText}>
+                  {typeof field.value === 'string'
+                    ? (field.value.trim() ? field.value : '—')
+                    : (field.value ?? '—')}
+                </Caption1>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {!props.badges && props.right ? <div className={styles.rowCardBadges}>{props.right}</div> : null}
+      {props.details}
+      </div>
+    </Card>
+  );
+}
+
+export function ModalHeader(props: {
+  title: string;
+  onClose: () => void;
+}): ReactNode {
+  const styles = useStyles();
+  return (
+    <div className={styles.panelHeader}>
+      <Subtitle2>{props.title}</Subtitle2>
+      <ResponsiveButton label="Close" icon={<Dismiss24Regular />} appearance="subtle" onClick={props.onClose} />
+    </div>
+  );
+}

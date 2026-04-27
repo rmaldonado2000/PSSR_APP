@@ -1,0 +1,586 @@
+{
+  "name": "crc07_pssr_deficiency",
+  "title": "PSSR_Deficiencies",
+  "schema": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "x-ms-dataverse-entity": true,
+      "x-ms-dataverse-entityset": "crc07_pssr_deficiencies",
+      "x-ms-dataverse-primary-id": "crc07_pssr_deficiencyid",
+      "x-ms-dataverse-primary-name": "crc07_deficiencyid",
+      "properties": {
+        "crc07_acceptedcategory": {
+          "type": "string",
+          "title": "Accepted Category",
+          "x-ms-dataverse-attribute": "crc07_acceptedcategory",
+          "x-ms-dataverse-type": "PicklistType",
+          "x-ms-schema-name": "crc07_AcceptedCategory",
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ],
+          "x-ms-enum-values": [
+            507650000,
+            507650001,
+            507650002
+          ],
+          "Color": [
+            null,
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "9479189a-ef3f-f111-88b4-000d3af418ff",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Accepted Category",
+          "x-ms-optionSetType": "Picklist"
+        },
+        "crc07_acceptedcategoryname": {
+          "type": "string",
+          "title": "crc07_acceptedcategoryname",
+          "x-ms-dataverse-attribute": "crc07_acceptedcategoryname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "crc07_acceptedcategoryName",
+          "x-ms-read-only": true
+        },
+        "crc07_closed_by": {
+          "type": "string",
+          "title": "Closed_By",
+          "x-ms-dataverse-attribute": "crc07_closed_by",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "crc07_Closed_By"
+        },
+        "crc07_closed_byname": {
+          "type": "string",
+          "title": "crc07_closed_byname",
+          "x-ms-dataverse-attribute": "crc07_closed_byname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_Closed_ByName",
+          "x-ms-read-only": true,
+          "maxLength": 200
+        },
+        "crc07_closed_byyominame": {
+          "type": "string",
+          "title": "crc07_closed_byyominame",
+          "x-ms-dataverse-attribute": "crc07_closed_byyominame",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_Closed_ByYomiName",
+          "x-ms-read-only": true,
+          "maxLength": 200
+        },
+        "crc07_closedon": {
+          "type": "string",
+          "title": "Closed On",
+          "x-ms-dataverse-attribute": "crc07_closedon",
+          "x-ms-dataverse-type": "DateTimeType",
+          "x-ms-schema-name": "crc07_ClosedOn"
+        },
+        "crc07_closeoutcomment": {
+          "type": "string",
+          "title": "Closeout Comment",
+          "x-ms-dataverse-attribute": "crc07_closeoutcomment",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_CloseoutComment",
+          "maxLength": 4000
+        },
+        "crc07_deficiencyid": {
+          "type": "string",
+          "title": "Deficiency ID",
+          "x-ms-dataverse-attribute": "crc07_deficiencyid",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_DeficiencyID",
+          "x-ms-dataverse-primary-name": true,
+          "required": true,
+          "maxLength": 850
+        },
+        "crc07_deficiencyname": {
+          "type": "string",
+          "title": "Deficiency Name",
+          "x-ms-dataverse-attribute": "crc07_deficiencyname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_DeficiencyName",
+          "maxLength": 100
+        },
+        "crc07_discipline": {
+          "type": "string",
+          "title": "Discipline",
+          "x-ms-dataverse-attribute": "crc07_discipline",
+          "x-ms-dataverse-type": "PicklistType",
+          "x-ms-schema-name": "crc07_Discipline",
+          "enum": [
+            "Mechanical",
+            "Electrical",
+            "Instrumentation",
+            "Civil"
+          ],
+          "x-ms-enum-values": [
+            507650000,
+            507650001,
+            507650002,
+            507650003
+          ],
+          "Color": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "9779189a-ef3f-f111-88b4-000d3af418ff",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Discipline",
+          "x-ms-optionSetType": "Picklist"
+        },
+        "crc07_disciplinename": {
+          "type": "string",
+          "title": "crc07_disciplinename",
+          "x-ms-dataverse-attribute": "crc07_disciplinename",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "crc07_disciplineName",
+          "x-ms-read-only": true
+        },
+        "crc07_generalcomment": {
+          "type": "string",
+          "title": "General Comment",
+          "x-ms-dataverse-attribute": "crc07_generalcomment",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_GeneralComment",
+          "maxLength": 4000
+        },
+        "crc07_initialcategory": {
+          "type": "string",
+          "title": "Initial Category",
+          "x-ms-dataverse-attribute": "crc07_initialcategory",
+          "x-ms-dataverse-type": "PicklistType",
+          "x-ms-schema-name": "crc07_InitialCategory",
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ],
+          "x-ms-enum-values": [
+            507650000,
+            507650001,
+            507650002
+          ],
+          "Color": [
+            null,
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "9a79189a-ef3f-f111-88b4-000d3af418ff",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Initial Category",
+          "x-ms-optionSetType": "Picklist"
+        },
+        "crc07_initialcategoryname": {
+          "type": "string",
+          "title": "crc07_initialcategoryname",
+          "x-ms-dataverse-attribute": "crc07_initialcategoryname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "crc07_initialcategoryName",
+          "x-ms-read-only": true
+        },
+        "crc07_pssr_deficiencyid": {
+          "type": "string",
+          "title": "PSSR_Deficiency",
+          "x-ms-dataverse-attribute": "crc07_pssr_deficiencyid",
+          "x-ms-dataverse-type": "UniqueidentifierType",
+          "x-ms-schema-name": "crc07_PSSR_DeficiencyId",
+          "x-ms-dataverse-primary-id": true,
+          "required": true,
+          "x-ms-keyType": "primary"
+        },
+        "crc07_relatedchecklist": {
+          "type": "string",
+          "title": "Related Checklist",
+          "x-ms-dataverse-attribute": "crc07_relatedchecklist",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "crc07_RelatedChecklist"
+        },
+        "crc07_relatedchecklistname": {
+          "type": "string",
+          "title": "crc07_relatedchecklistname",
+          "x-ms-dataverse-attribute": "crc07_relatedchecklistname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_RelatedChecklistName",
+          "x-ms-read-only": true,
+          "maxLength": 850
+        },
+        "crc07_relatedplan": {
+          "type": "string",
+          "title": "Related Plan",
+          "x-ms-dataverse-attribute": "crc07_relatedplan",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "crc07_RelatedPlan"
+        },
+        "crc07_relatedplanname": {
+          "type": "string",
+          "title": "crc07_relatedplanname",
+          "x-ms-dataverse-attribute": "crc07_relatedplanname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_RelatedPlanName",
+          "x-ms-read-only": true,
+          "maxLength": 850
+        },
+        "crc07_relatedquestion": {
+          "type": "string",
+          "title": "Related Question",
+          "x-ms-dataverse-attribute": "crc07_relatedquestion",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "crc07_RelatedQuestion"
+        },
+        "crc07_relatedquestionname": {
+          "type": "string",
+          "title": "crc07_relatedquestionname",
+          "x-ms-dataverse-attribute": "crc07_relatedquestionname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "crc07_RelatedQuestionName",
+          "x-ms-read-only": true,
+          "maxLength": 850
+        },
+        "crc07_status": {
+          "type": "string",
+          "title": "Status",
+          "x-ms-dataverse-attribute": "crc07_status",
+          "x-ms-dataverse-type": "PicklistType",
+          "x-ms-schema-name": "crc07_Status",
+          "enum": [
+            "Open",
+            "In Progress",
+            "Closed"
+          ],
+          "x-ms-enum-values": [
+            507650000,
+            507650001,
+            507650002
+          ],
+          "Color": [
+            null,
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "9d79189a-ef3f-f111-88b4-000d3af418ff",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Status",
+          "x-ms-optionSetType": "Picklist"
+        },
+        "crc07_statusname": {
+          "type": "string",
+          "title": "crc07_statusname",
+          "x-ms-dataverse-attribute": "crc07_statusname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "crc07_statusName",
+          "x-ms-read-only": true
+        },
+        "createdby": {
+          "type": "string",
+          "title": "Created By",
+          "x-ms-dataverse-attribute": "createdby",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "CreatedBy",
+          "x-ms-read-only": true
+        },
+        "createdbyname": {
+          "type": "string",
+          "title": "createdbyname",
+          "x-ms-dataverse-attribute": "createdbyname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "CreatedByName",
+          "x-ms-read-only": true,
+          "maxLength": 100
+        },
+        "createdbyyominame": {
+          "type": "string",
+          "title": "createdbyyominame",
+          "x-ms-dataverse-attribute": "createdbyyominame",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "CreatedByYomiName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "createdon": {
+          "type": "string",
+          "title": "Created On",
+          "x-ms-dataverse-attribute": "createdon",
+          "x-ms-dataverse-type": "DateTimeType",
+          "x-ms-schema-name": "CreatedOn",
+          "x-ms-read-only": true
+        },
+        "createdonbehalfby": {
+          "type": "string",
+          "title": "Created By (Delegate)",
+          "x-ms-dataverse-attribute": "createdonbehalfby",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "CreatedOnBehalfBy",
+          "x-ms-read-only": true
+        },
+        "createdonbehalfbyname": {
+          "type": "string",
+          "title": "createdonbehalfbyname",
+          "x-ms-dataverse-attribute": "createdonbehalfbyname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "CreatedOnBehalfByName",
+          "x-ms-read-only": true,
+          "maxLength": 100
+        },
+        "createdonbehalfbyyominame": {
+          "type": "string",
+          "title": "createdonbehalfbyyominame",
+          "x-ms-dataverse-attribute": "createdonbehalfbyyominame",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "CreatedOnBehalfByYomiName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "importsequencenumber": {
+          "type": "string",
+          "title": "Import Sequence Number",
+          "x-ms-dataverse-attribute": "importsequencenumber",
+          "x-ms-dataverse-type": "IntegerType",
+          "x-ms-schema-name": "ImportSequenceNumber"
+        },
+        "modifiedby": {
+          "type": "string",
+          "title": "Modified By",
+          "x-ms-dataverse-attribute": "modifiedby",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "ModifiedBy",
+          "x-ms-read-only": true
+        },
+        "modifiedbyname": {
+          "type": "string",
+          "title": "modifiedbyname",
+          "x-ms-dataverse-attribute": "modifiedbyname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ModifiedByName",
+          "x-ms-read-only": true,
+          "maxLength": 100
+        },
+        "modifiedbyyominame": {
+          "type": "string",
+          "title": "modifiedbyyominame",
+          "x-ms-dataverse-attribute": "modifiedbyyominame",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ModifiedByYomiName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "modifiedon": {
+          "type": "string",
+          "title": "Modified On",
+          "x-ms-dataverse-attribute": "modifiedon",
+          "x-ms-dataverse-type": "DateTimeType",
+          "x-ms-schema-name": "ModifiedOn",
+          "x-ms-read-only": true
+        },
+        "modifiedonbehalfby": {
+          "type": "string",
+          "title": "Modified By (Delegate)",
+          "x-ms-dataverse-attribute": "modifiedonbehalfby",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "ModifiedOnBehalfBy",
+          "x-ms-read-only": true
+        },
+        "modifiedonbehalfbyname": {
+          "type": "string",
+          "title": "modifiedonbehalfbyname",
+          "x-ms-dataverse-attribute": "modifiedonbehalfbyname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ModifiedOnBehalfByName",
+          "x-ms-read-only": true,
+          "maxLength": 100
+        },
+        "modifiedonbehalfbyyominame": {
+          "type": "string",
+          "title": "modifiedonbehalfbyyominame",
+          "x-ms-dataverse-attribute": "modifiedonbehalfbyyominame",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ModifiedOnBehalfByYomiName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "overriddencreatedon": {
+          "type": "string",
+          "title": "Record Created On",
+          "x-ms-dataverse-attribute": "overriddencreatedon",
+          "x-ms-dataverse-type": "DateTimeType",
+          "x-ms-schema-name": "OverriddenCreatedOn"
+        },
+        "ownerid": {
+          "type": "string",
+          "title": "Owner",
+          "x-ms-dataverse-attribute": "ownerid",
+          "x-ms-dataverse-type": "OwnerType",
+          "x-ms-schema-name": "OwnerId",
+          "required": true
+        },
+        "owneridname": {
+          "type": "string",
+          "title": "owneridname",
+          "x-ms-dataverse-attribute": "owneridname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "OwnerIdName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "owneridtype": {
+          "type": "string",
+          "title": "owneridtype",
+          "x-ms-dataverse-attribute": "owneridtype",
+          "x-ms-dataverse-type": "EntityNameType",
+          "x-ms-schema-name": "OwnerIdType",
+          "required": true
+        },
+        "owneridyominame": {
+          "type": "string",
+          "title": "owneridyominame",
+          "x-ms-dataverse-attribute": "owneridyominame",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "OwnerIdYomiName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "owningbusinessunit": {
+          "type": "string",
+          "title": "Owning Business Unit",
+          "x-ms-dataverse-attribute": "owningbusinessunit",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "OwningBusinessUnit",
+          "x-ms-read-only": true
+        },
+        "owningbusinessunitname": {
+          "type": "string",
+          "title": "owningbusinessunitname",
+          "x-ms-dataverse-attribute": "owningbusinessunitname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "OwningBusinessUnitName",
+          "x-ms-read-only": true,
+          "required": true,
+          "maxLength": 100
+        },
+        "owningteam": {
+          "type": "string",
+          "title": "Owning Team",
+          "x-ms-dataverse-attribute": "owningteam",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "OwningTeam",
+          "x-ms-read-only": true
+        },
+        "owninguser": {
+          "type": "string",
+          "title": "Owning User",
+          "x-ms-dataverse-attribute": "owninguser",
+          "x-ms-dataverse-type": "LookupType",
+          "x-ms-schema-name": "OwningUser",
+          "x-ms-read-only": true
+        },
+        "statecode": {
+          "type": "string",
+          "title": "Status",
+          "x-ms-dataverse-attribute": "statecode",
+          "x-ms-dataverse-type": "StateType",
+          "x-ms-schema-name": "statecode",
+          "required": true,
+          "enum": [
+            "Active",
+            "Inactive"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "5379189a-ef3f-f111-88b4-000d3af418ff",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Status",
+          "x-ms-optionSetType": "State"
+        },
+        "statecodename": {
+          "type": "string",
+          "title": "statecodename",
+          "x-ms-dataverse-attribute": "statecodename",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "statecodeName",
+          "x-ms-read-only": true
+        },
+        "statuscode": {
+          "type": "string",
+          "title": "Status Reason",
+          "x-ms-dataverse-attribute": "statuscode",
+          "x-ms-dataverse-type": "StatusType",
+          "x-ms-schema-name": "statuscode",
+          "enum": [
+            "Active",
+            "Inactive"
+          ],
+          "x-ms-enum-values": [
+            1,
+            2
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "5d79189a-ef3f-f111-88b4-000d3af418ff",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Status Reason",
+          "x-ms-optionSetType": "Status"
+        },
+        "statuscodename": {
+          "type": "string",
+          "title": "statuscodename",
+          "x-ms-dataverse-attribute": "statuscodename",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "statuscodeName",
+          "x-ms-read-only": true
+        },
+        "timezoneruleversionnumber": {
+          "type": "string",
+          "title": "Time Zone Rule Version Number",
+          "x-ms-dataverse-attribute": "timezoneruleversionnumber",
+          "x-ms-dataverse-type": "IntegerType",
+          "x-ms-schema-name": "TimeZoneRuleVersionNumber"
+        },
+        "utcconversiontimezonecode": {
+          "type": "string",
+          "title": "UTC Conversion Time Zone Code",
+          "x-ms-dataverse-attribute": "utcconversiontimezonecode",
+          "x-ms-dataverse-type": "IntegerType",
+          "x-ms-schema-name": "UTCConversionTimeZoneCode"
+        },
+        "versionnumber": {
+          "type": "string",
+          "title": "Version Number",
+          "x-ms-dataverse-attribute": "versionnumber",
+          "x-ms-dataverse-type": "BigIntType",
+          "x-ms-schema-name": "VersionNumber",
+          "x-ms-read-only": true
+        }
+      },
+      "required": [
+        "crc07_deficiencyid",
+        "crc07_pssr_deficiencyid",
+        "createdbyyominame",
+        "createdonbehalfbyyominame",
+        "modifiedbyyominame",
+        "modifiedonbehalfbyyominame",
+        "ownerid",
+        "owneridname",
+        "owneridtype",
+        "owneridyominame",
+        "owningbusinessunitname",
+        "statecode"
+      ]
+    }
+  }
+}
