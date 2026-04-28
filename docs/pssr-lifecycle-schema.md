@@ -131,10 +131,13 @@ Lifecycle columns:
 | --- | --- |
 | Lifecycle phase | `crc07_pssrstage` |
 | Role | `crc07_role` |
+| Role label | `crc07_rolename` |
 | Decision status | `crc07_status` |
+| Decision status label | `crc07_statusname` |
 | Decision date | `crc07_date` |
 | Comment | `crc07_comment` |
 | Actor lookup bind | `crc07_Member@odata.bind` |
+| Actor lookup value | `_crc07_member_value` |
 | Parent Plan lookup | `_crc07_relatedplan_value` |
 | Modified On | `modifiedon` |
 
@@ -170,14 +173,34 @@ Approval status option set `crc07_status`:
 | `507650000` | Approved |
 | `507650001` | Rejected |
 | `507650002` | Completed |
-| `null` | In Progress |
+| non-terminal current value in Dataverse | In Progress |
 
-Note: the current approval role schema does not include an `Originator` choice. The implemented Draft completion record is stored as a Draft approval with status `Completed`, actor set to the originator, and a comment indicating the originator action.
+Approval label handling:
+
+- The app should prefer `crc07_rolename`, `crc07_pssrstagename`, and `crc07_statusname` from the PSSR Approval table when Dataverse returns them.
+- Generated local enum metadata can lag behind Dataverse option-set changes, so it is only a fallback label source.
+- This matters for new approval choices such as `Originator`.
 
 Latest approval rule:
 
 - Latest record for a phase/role pair = highest `modifiedon` descending.
 - Approval history is append-only. Existing records are updated only when the state machine explicitly targets the latest matching record.
+
+Pending Plan approval request rule:
+
+- The actionable Plan approval request is not just the latest `Plan / PSSR-Lead` row.
+- The app treats the pending request row as the approval authority only when all of the following are true:
+	- `crc07_pssrstage = Plan`
+	- `crc07_role = PSSR-Lead`
+	- `_crc07_member_value` is empty
+	- the approval status is non-terminal (`In Progress` in the current process)
+	- `crc07_comment = Awaiting PSSR-Lead approval.`
+
+Draft-to-Plan approval records:
+
+- When Draft advances to Plan, the app creates:
+	- a `Draft / Originator / Completed` approval row bound to the acting user with comment `Advanced by originator.`
+	- a `Plan / PSSR-Lead / In Progress` request row with no member assigned and comment `Awaiting PSSR-Lead approval.`
 
 ## Team Membership
 

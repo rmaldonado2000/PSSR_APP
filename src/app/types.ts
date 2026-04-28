@@ -86,6 +86,7 @@ export interface DeficiencyVm {
 export interface ApprovalVm {
   id: string;
   planId?: string;
+  memberId?: string;
   stageCode?: number;
   stageLabel?: string;
   roleCode?: number;

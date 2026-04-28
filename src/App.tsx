@@ -94,6 +94,7 @@ import {
   triggerExecutionPhase as runExecutionTransition,
 } from './app/lifecycleTransitions';
 import { t } from './app/i18n';
+import { formatRoleLabel } from './app/format';
 import { getDeficiencyStatusTone } from './app/semanticColors';
 import { type ChecklistDetailsTab, type AppRouteTab, type PlanDetailsTab, parseHashRoute, updateHashRoute } from './app/router';
 import { trackError, trackFlow, trackView } from './app/telemetry';
@@ -767,13 +768,8 @@ function getInitials(name: string | undefined): string {
     .join('');
 }
 
-function formatRoleLabel(roleLabel: string | undefined): string {
-  const value = roleLabel?.trim();
-  if (!value) {
-    return 'Role unavailable';
-  }
-
-  return value.replace(/_/g, ' ');
+function isUserPermissionReason(reason: string): boolean {
+  return reason.startsWith('Only the ');
 }
 
 type QuestionResponseSnapshot = Record<string, number | undefined>;
@@ -1174,20 +1170,22 @@ export default function App() {
       return [] as string[];
     }
 
+    const getDisplayWarnings = (reasons: string[]) => reasons.filter((reason) => !isUserPermissionReason(reason));
+
     if (selectedPlan.stageCode === PLAN_STAGE_DRAFT) {
-      return selectedPlanCommandState.advanceToPlan.enabled ? [] : selectedPlanCommandState.advanceToPlan.reasons;
+      return selectedPlanCommandState.advanceToPlan.enabled ? [] : getDisplayWarnings(selectedPlanCommandState.advanceToPlan.reasons);
     }
 
     if (selectedPlan.stageCode === PLAN_STAGE_PLAN || selectedPlan.stageCode === PLAN_STAGE_APPROVAL) {
-      return selectedPlanCommandState.approve.enabled ? [] : selectedPlanCommandState.approve.reasons;
+      return selectedPlanCommandState.approve.enabled ? [] : getDisplayWarnings(selectedPlanCommandState.approve.reasons);
     }
 
     if (selectedPlan.stageCode === 507650002) {
-      return selectedPlanCommandState.advanceToApproval.enabled ? [] : selectedPlanCommandState.advanceToApproval.reasons;
+      return selectedPlanCommandState.advanceToApproval.enabled ? [] : getDisplayWarnings(selectedPlanCommandState.advanceToApproval.reasons);
     }
 
     if (selectedPlan.stageCode === PLAN_STAGE_COMPLETION) {
-      return selectedPlanCommandState.finalSignOff.enabled ? [] : selectedPlanCommandState.finalSignOff.reasons;
+      return selectedPlanCommandState.finalSignOff.enabled ? [] : getDisplayWarnings(selectedPlanCommandState.finalSignOff.reasons);
     }
 
     return [] as string[];
@@ -2650,6 +2648,7 @@ export default function App() {
     const optimisticEntry: TeamMemberVm = {
       id: `temp-team-${Date.now()}`,
       planId: selectedPlan.id,
+      memberId: teamMemberDraft.memberId,
       name: teamMemberDraft.memberName,
       roleCode: teamMemberDraft.roleCode,
       roleLabel: teamRoleOptions.find((item) => item.key === teamMemberDraft.roleCode)?.label,

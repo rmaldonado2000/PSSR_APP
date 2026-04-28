@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   APPROVAL_STATUS_APPROVED,
   APPROVAL_STATUS_COMPLETED,
+  APPROVAL_STATUS_REJECTED,
   CHECKLIST_STATUS_COMPLETE,
   CHECKLIST_STATUS_IN_PROGRESS,
   CHECKLIST_STATUS_NOT_STARTED,
@@ -17,6 +18,7 @@ import {
   TEAM_ROLE_PU_LEAD,
   canEditDeficiency,
   getDraftToPlanErrors,
+  getPlanPhaseCommandState,
   isPlanFinalized,
   isQuestionAnsweringEnabled,
   isTeamEditable,
@@ -187,11 +189,114 @@ describe('lifecycle transitions', () => {
     expect(result.success).toBe(false);
   });
 
+  it('approves the Plan phase using the selected plan team role even when the current profile has no system user id', async () => {
+    const deps = createDependencies();
+    const context = createContext({
+      plan: createPlan({ stageCode: PLAN_STAGE_PLAN }),
+      approvals: [createApproval({
+        id: 'approval-plan',
+        stageCode: PLAN_STAGE_PLAN,
+        roleCode: TEAM_ROLE_PSSR_LEAD,
+        memberId: undefined,
+        comment: 'Awaiting PSSR-Lead approval.',
+      })],
+      currentUser: createUser({ systemUserId: undefined, fullName: 'Ricardo Maldonado' }),
+      teamMembers: [createTeam({ memberId: undefined, name: 'Ricardo Maldonado', roleCode: TEAM_ROLE_PSSR_LEAD })],
+    });
+
+    const result = await approvePlanStage(context, deps);
+    expect(result.success).toBe(true);
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+  });
+
+  it('treats a null approval status as in progress for Plan approval', async () => {
+    const deps = createDependencies();
+    const context = createContext({
+      plan: createPlan({ stageCode: PLAN_STAGE_PLAN }),
+      approvals: [createApproval({
+        id: 'approval-plan',
+        stageCode: PLAN_STAGE_PLAN,
+        roleCode: TEAM_ROLE_PSSR_LEAD,
+        decisionCode: null as unknown as number | undefined,
+        memberId: undefined,
+        comment: 'Awaiting PSSR-Lead approval.',
+      })],
+      currentUser: createUser({ systemUserId: undefined, fullName: 'Ricardo Maldonado' }),
+      teamMembers: [createTeam({ memberId: undefined, name: 'Ricardo Maldonado', roleCode: TEAM_ROLE_PSSR_LEAD })],
+    });
+
+    const result = await approvePlanStage(context, deps);
+
+    expect(result.success).toBe(true);
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+  });
+
+  it('uses the pending unassigned PSSR-Lead request row instead of a newer non-request Plan approval row', async () => {
+    const deps = createDependencies();
+    const context = createContext({
+      plan: createPlan({ stageCode: PLAN_STAGE_PLAN }),
+      approvals: [
+        createApproval({
+          id: 'approval-request',
+          stageCode: PLAN_STAGE_PLAN,
+          roleCode: TEAM_ROLE_PSSR_LEAD,
+          decisionCode: undefined,
+          memberId: undefined,
+          comment: 'Awaiting PSSR-Lead approval.',
+          modifiedOn: '2026-04-28T10:00:00.000Z',
+        }),
+        createApproval({
+          id: 'approval-other',
+          stageCode: PLAN_STAGE_PLAN,
+          roleCode: TEAM_ROLE_PSSR_LEAD,
+          decisionCode: APPROVAL_STATUS_REJECTED,
+          memberId: 'user-pssr',
+          comment: 'Rejected by reviewer.',
+          modifiedOn: '2026-04-28T12:00:00.000Z',
+        }),
+      ],
+      currentUser: createUser({ systemUserId: 'user-pssr' }),
+      teamMembers: [createTeam({ memberId: 'user-pssr', roleCode: TEAM_ROLE_PSSR_LEAD })],
+    });
+
+    const result = await approvePlanStage(context, deps);
+
+    expect(result.success).toBe(true);
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-request', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+  });
+
+  it('creates a missing Plan approval record before approving legacy Plan-phase records', async () => {
+    const deps = createDependencies();
+    deps.createApproval.mockResolvedValueOnce('approval-plan-created');
+    const context = createContext({
+      plan: createPlan({ stageCode: PLAN_STAGE_PLAN }),
+      approvals: [],
+      currentUser: createUser({ systemUserId: undefined, fullName: 'Ricardo Maldonado' }),
+      teamMembers: [createTeam({ memberId: undefined, name: 'Ricardo Maldonado', roleCode: TEAM_ROLE_PSSR_LEAD })],
+    });
+
+    const result = await approvePlanStage(context, deps);
+
+    expect(result.success).toBe(true);
+    expect(deps.createApproval).toHaveBeenCalledWith(expect.objectContaining({
+      planId: 'plan-1',
+      stageCode: PLAN_STAGE_PLAN,
+      roleCode: TEAM_ROLE_PSSR_LEAD,
+    }));
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan-created', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+  });
+
   it('rejects the Plan phase back to Draft', async () => {
     const deps = createDependencies();
     const context = createContext({
       plan: createPlan({ stageCode: PLAN_STAGE_PLAN }),
-      approvals: [createApproval({ id: 'approval-plan', stageCode: PLAN_STAGE_PLAN, roleCode: TEAM_ROLE_PSSR_LEAD })],
+      approvals: [createApproval({
+        id: 'approval-plan',
+        stageCode: PLAN_STAGE_PLAN,
+        roleCode: TEAM_ROLE_PSSR_LEAD,
+        memberId: undefined,
+        comment: 'Awaiting PSSR-Lead approval.',
+      })],
       currentUser: createUser({ systemUserId: 'user-pssr' }),
     });
 
@@ -226,6 +331,21 @@ describe('lifecycle transitions', () => {
     );
 
     expect(result.success).toBe(false);
+  });
+
+  it('disables Approval-phase approve and reject when deficiencies still fail approval prerequisites', () => {
+    const commandState = getPlanPhaseCommandState({
+      plan: createPlan({ stageCode: PLAN_STAGE_APPROVAL }),
+      approvals: [createApproval({ stageCode: PLAN_STAGE_APPROVAL, roleCode: TEAM_ROLE_PU_LEAD })],
+      checklists: [createChecklist({ statusCode: CHECKLIST_STATUS_COMPLETE })],
+      deficiencies: [createDeficiency({ acceptedCategoryCode: undefined, statusCode: DEFICIENCY_STATUS_OPEN })],
+      teamMembers: [createTeam({ memberId: 'user-pu', roleCode: TEAM_ROLE_PU_LEAD })],
+      currentUser: createUser({ systemUserId: 'user-pu' }),
+    });
+
+    expect(commandState.approve.enabled).toBe(false);
+    expect(commandState.reject.enabled).toBe(false);
+    expect(commandState.approve.reasons).toContain('Every deficiency must have an accepted category.');
   });
 
   it('blocks Execution to Approval until accepted categories and category A closures are complete', async () => {

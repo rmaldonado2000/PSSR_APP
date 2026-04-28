@@ -1,7 +1,7 @@
 import { Badge, Button, Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, MoreHorizontal24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
 import { Fragment, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { formatDate, truncate } from '../app/format';
+import { formatDate, formatRoleLabel, truncate } from '../app/format';
 import { isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
 import { getApprovalDecisionTone, getChecklistStatusTone, getDeficiencyStatusTone, getPlanPhaseTone } from '../app/semanticColors';
 import type { ApprovalVm, ChecklistVm, DeficiencyVm, PlanDetailsDraftVm, PlanVm, TeamMemberVm } from '../app/types';
@@ -768,12 +768,12 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                 return (
                   <GalleryListItem>
                     <RowCard
-                      title={approval.roleLabel ?? 'Role not set'}
+                      title={formatRoleLabel(approval.roleLabel, 'Role not set')}
                       icon={<TableMoveAbove24Regular />}
                       accentColor={decisionTone.accentColor}
                       badges={(
                         <>
-                          <StatusChip value={approval.decisionLabel ?? 'No Decision'} tone={decisionTone} icon={<Info24Regular />} />
+                          <StatusChip value={approval.decisionLabel ?? 'In Progress'} tone={decisionTone} icon={<Info24Regular />} />
                           <StatusChip value={approval.stageLabel ?? 'No Phase'} tone={phaseTone} icon={<Tag16Regular />} />
                         </>
                       )}
@@ -816,7 +816,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                     accentColor={tokens.colorPaletteBlueBorderActive}
                     badges={(
                       <Badge size="small" appearance="tint" color="brand" icon={<Tag16Regular />}>
-                        {member.roleLabel ?? 'Role not assigned'}
+                        {formatRoleLabel(member.roleLabel, 'Role not assigned')}
                       </Badge>
                     )}
                   />

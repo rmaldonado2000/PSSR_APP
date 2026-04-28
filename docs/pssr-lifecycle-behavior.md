@@ -21,6 +21,9 @@ Buttons appear only in the existing Plan Details header action row.
   - the plan has at least one checklist
   - the team includes a `PSSR_Lead`
   - the team includes a `PU_Lead`
+- On success, the app writes two approval records:
+  - `Draft / Originator / Completed`, with the current user in `Member` and comment `Advanced by originator.`
+  - `Plan / PSSR-Lead / In Progress`, with `Member = null` and comment `Awaiting PSSR-Lead approval.`
 
 ### Plan
 
@@ -28,7 +31,13 @@ Buttons appear only in the existing Plan Details header action row.
 - `Reject`
 - Enabled only when:
   - the current user is the `PSSR_Lead` team member
-  - the latest `Plan / PSSR_Lead` approval record is still in progress
+  - a pending request row exists with all of the following values:
+    - `Phase = Plan`
+    - `Role = PSSR-Lead`
+    - `Member = null`
+    - status is non-terminal, which in the current Dataverse process means `In Progress`
+    - `Comment = Awaiting PSSR-Lead approval.`
+- The app does not use the latest arbitrary `Plan / PSSR-Lead` history row to enable these buttons. It targets the pending unassigned request row specifically.
 
 ### Execution
 
@@ -46,6 +55,8 @@ Buttons appear only in the existing Plan Details header action row.
 - Enabled only when:
   - the current user is the `PU_Lead` team member
   - the latest `Approval / PU_Lead` approval record is still in progress
+  - every deficiency has an accepted category
+  - every category `A` deficiency is `Closed`
 
 ### Completion
 
@@ -162,6 +173,13 @@ Accepted category stays disabled until the deficiency status is `In Progress`.
 
 ## Warnings and failures
 
-- Disabled lifecycle commands surface the unmet conditions through button hover text and an in-screen warning bar.
+- Disabled lifecycle commands surface the unmet conditions through button hover text.
+- The in-screen warning bar is reserved for plan-state blockers and does not repeat user-specific role permission messages.
 - Transition failures surface through the app error path.
 - The transition layer returns structured `{ success, errors, warnings, updatedIds }` results so UI messages can remain specific.
+
+## Approval display
+
+- Approval role, phase, and status labels should be read from the PSSR Approval table label columns when Dataverse returns them.
+- Local enum metadata is only a fallback when the Dataverse label columns are unavailable in the current environment.
+- `In Progress` is treated as any non-terminal approval state. Terminal approval states are `Approved`, `Rejected`, and `Completed`.

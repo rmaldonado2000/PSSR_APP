@@ -16,14 +16,17 @@ import {
   TEAM_ROLE_PU_LEAD,
   createFailureResult,
   createSuccessResult,
+  findPendingApprovalRequest,
   findLatestApproval,
   getChecklistCompleteErrors,
   getDraftToPlanErrors,
   getExecutionToApprovalErrors,
   getFinalSignOffErrors,
   hasTeamRole,
+  isApprovalInProgress,
   isPlanApproved,
   isPlanFinalized,
+  PLAN_APPROVAL_REQUEST_COMMENT,
   type LifecycleResult,
 } from './lifecycle';
 
@@ -100,14 +103,19 @@ export async function advanceDraftToPlan(
       approveOn: getNow(),
     });
 
-    const existingPlanApproval = findLatestApproval(context.approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD);
+    const existingPlanApproval = findPendingApprovalRequest(
+      context.approvals,
+      PLAN_STAGE_PLAN,
+      TEAM_ROLE_PSSR_LEAD,
+      PLAN_APPROVAL_REQUEST_COMMENT,
+    );
     let planApprovalId = existingPlanApproval?.id;
-    if (!existingPlanApproval || existingPlanApproval.decisionCode !== undefined) {
+    if (!existingPlanApproval) {
       planApprovalId = await dependencies.createApproval({
         planId: context.plan.id,
         stageCode: PLAN_STAGE_PLAN,
         roleCode: TEAM_ROLE_PSSR_LEAD,
-        comment: 'Awaiting PSSR-Lead approval.',
+        comment: PLAN_APPROVAL_REQUEST_COMMENT,
       });
     }
 
@@ -126,6 +134,12 @@ export async function approvePlanStage(
   dependencies: TransitionDependencies,
 ): Promise<LifecycleResult> {
   const latestPlanApproval = findLatestApproval(context.approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD);
+  const pendingPlanApproval = findPendingApprovalRequest(
+    context.approvals,
+    PLAN_STAGE_PLAN,
+    TEAM_ROLE_PSSR_LEAD,
+    PLAN_APPROVAL_REQUEST_COMMENT,
+  );
   if (context.plan.stageCode !== PLAN_STAGE_PLAN || !hasTeamRole(context.teamMembers, context.currentUser, TEAM_ROLE_PSSR_LEAD)) {
     return createFailureResult(['Only the PSSR-Lead can approve the Plan phase.']);
   }
@@ -134,16 +148,29 @@ export async function approvePlanStage(
     return createSuccessResult({ planApprovalId: latestPlanApproval.id, planId: context.plan.id });
   }
 
-  if (!latestPlanApproval || latestPlanApproval.decisionCode !== undefined) {
+  let planApprovalId = pendingPlanApproval?.id;
+
+  if (!pendingPlanApproval) {
+    try {
+      planApprovalId = await dependencies.createApproval({
+        planId: context.plan.id,
+        stageCode: PLAN_STAGE_PLAN,
+        roleCode: TEAM_ROLE_PSSR_LEAD,
+        comment: PLAN_APPROVAL_REQUEST_COMMENT,
+      });
+    } catch (error) {
+      return mapTransitionError(error);
+    }
+  } else if (!isApprovalInProgress(pendingPlanApproval)) {
     return createFailureResult(['The latest Plan approval is not in progress.']);
   }
 
   try {
-    await dependencies.updateApproval(latestPlanApproval.id, {
+    await dependencies.updateApproval(planApprovalId!, {
       statusCode: APPROVAL_STATUS_APPROVED,
       approveOn: getNow(),
     });
-    return createSuccessResult({ planApprovalId: latestPlanApproval.id, planId: context.plan.id });
+    return createSuccessResult({ planApprovalId: planApprovalId, planId: context.plan.id });
   } catch (error) {
     return mapTransitionError(error);
   }
@@ -155,6 +182,12 @@ export async function rejectPlanStage(
   dependencies: TransitionDependencies,
 ): Promise<LifecycleResult> {
   const latestPlanApproval = findLatestApproval(context.approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD);
+  const pendingPlanApproval = findPendingApprovalRequest(
+    context.approvals,
+    PLAN_STAGE_PLAN,
+    TEAM_ROLE_PSSR_LEAD,
+    PLAN_APPROVAL_REQUEST_COMMENT,
+  );
   if (context.plan.stageCode === PLAN_STAGE_DRAFT) {
     return createSuccessResult({ planId: context.plan.id, planApprovalId: latestPlanApproval?.id });
   }
@@ -163,18 +196,18 @@ export async function rejectPlanStage(
     return createFailureResult(['Only the PSSR-Lead can reject the Plan phase.']);
   }
 
-  if (!latestPlanApproval || latestPlanApproval.decisionCode !== undefined) {
+  if (!isApprovalInProgress(pendingPlanApproval)) {
     return createFailureResult(['The latest Plan approval is not in progress.']);
   }
 
   try {
-    await dependencies.updateApproval(latestPlanApproval.id, {
+    await dependencies.updateApproval(pendingPlanApproval.id, {
       statusCode: APPROVAL_STATUS_REJECTED,
       comment: reason,
       approveOn: getNow(),
     });
     await dependencies.updatePlan(context.plan.id, { stageCode: PLAN_STAGE_DRAFT });
-    return createSuccessResult({ planId: context.plan.id, planApprovalId: latestPlanApproval.id });
+    return createSuccessResult({ planId: context.plan.id, planApprovalId: pendingPlanApproval.id });
   } catch (error) {
     return mapTransitionError(error);
   }
@@ -236,7 +269,7 @@ export async function advanceExecutionToApproval(
     });
 
     const latestApprovalApproval = findLatestApproval(context.approvals, PLAN_STAGE_APPROVAL, TEAM_ROLE_PU_LEAD);
-    const approvalApprovalId = latestApprovalApproval && latestApprovalApproval.decisionCode === undefined
+    const approvalApprovalId = isApprovalInProgress(latestApprovalApproval)
       ? latestApprovalApproval.id
       : await dependencies.createApproval({
           planId: context.plan.id,
@@ -268,7 +301,7 @@ export async function approveApprovalStage(
     return createFailureResult(['Only the PU-Lead can approve the Approval phase.']);
   }
 
-  if (!latestApprovalApproval || latestApprovalApproval.decisionCode !== undefined) {
+  if (!isApprovalInProgress(latestApprovalApproval)) {
     return createFailureResult(['The latest Approval approval is not in progress.']);
   }
 
@@ -280,7 +313,7 @@ export async function approveApprovalStage(
     await dependencies.updatePlan(context.plan.id, { stageCode: PLAN_STAGE_COMPLETION });
 
     const latestCompletionApproval = findLatestApproval(context.approvals, PLAN_STAGE_COMPLETION, TEAM_ROLE_PSSR_LEAD);
-    const completionApprovalId = latestCompletionApproval && latestCompletionApproval.decisionCode === undefined
+    const completionApprovalId = isApprovalInProgress(latestCompletionApproval)
       ? latestCompletionApproval.id
       : await dependencies.createApproval({
           planId: context.plan.id,
@@ -313,7 +346,7 @@ export async function rejectApprovalStage(
     return createFailureResult(['Only the PU-Lead can reject the Approval phase.']);
   }
 
-  if (!latestApprovalApproval || latestApprovalApproval.decisionCode !== undefined) {
+  if (!isApprovalInProgress(latestApprovalApproval)) {
     return createFailureResult(['The latest Approval approval is not in progress.']);
   }
 
@@ -326,7 +359,7 @@ export async function rejectApprovalStage(
     await dependencies.updatePlan(context.plan.id, { stageCode: PLAN_STAGE_EXECUTION });
 
     const latestExecutionApproval = findLatestApproval(context.approvals, PLAN_STAGE_EXECUTION, TEAM_ROLE_PSSR_LEAD);
-    const executionApprovalId = latestExecutionApproval && latestExecutionApproval.decisionCode === undefined
+    const executionApprovalId = isApprovalInProgress(latestExecutionApproval)
       ? latestExecutionApproval.id
       : await dependencies.createApproval({
           planId: context.plan.id,
@@ -362,7 +395,7 @@ export async function finalSignOff(
     return createFailureResult(errors);
   }
 
-  if (!latestCompletionApproval || latestCompletionApproval.decisionCode !== undefined) {
+  if (!isApprovalInProgress(latestCompletionApproval)) {
     return createFailureResult(['The latest Completion approval is not in progress.']);
   }
 

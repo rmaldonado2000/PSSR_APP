@@ -24,6 +24,8 @@ export const APPROVAL_STATUS_APPROVED = 507650000;
 export const APPROVAL_STATUS_REJECTED = 507650001;
 export const APPROVAL_STATUS_COMPLETED = 507650002;
 
+export const PLAN_APPROVAL_REQUEST_COMMENT = 'Awaiting PSSR-Lead approval.';
+
 export const TEAM_ROLE_PSSR_LEAD = 507650000;
 export const TEAM_ROLE_PU_LEAD = 507650001;
 
@@ -53,6 +55,16 @@ function sortByModifiedOnDescending<T extends { modifiedOn?: string }>(items: T[
   });
 }
 
+function normalizeComment(value?: string): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isTerminalApprovalStatus(value?: number): boolean {
+  return value === APPROVAL_STATUS_APPROVED
+    || value === APPROVAL_STATUS_REJECTED
+    || value === APPROVAL_STATUS_COMPLETED;
+}
+
 export function findLatestApproval(
   approvals: ApprovalVm[],
   stageCode: number,
@@ -63,8 +75,25 @@ export function findLatestApproval(
   )[0];
 }
 
+export function findPendingApprovalRequest(
+  approvals: ApprovalVm[],
+  stageCode: number,
+  roleCode: number,
+  expectedComment: string,
+): ApprovalVm | undefined {
+  return sortByModifiedOnDescending(
+    approvals.filter((approval) => (
+      approval.stageCode === stageCode
+      && approval.roleCode === roleCode
+      && !isTerminalApprovalStatus(approval.decisionCode)
+      && !approval.memberId
+      && normalizeComment(approval.comment) === normalizeComment(expectedComment)
+    )),
+  )[0];
+}
+
 export function isApprovalInProgress(approval: ApprovalVm | undefined): boolean {
-  return approval !== undefined && approval.decisionCode === undefined;
+  return approval !== undefined && !isTerminalApprovalStatus(approval.decisionCode);
 }
 
 export function isPlanApproved(approvals: ApprovalVm[]): boolean {
@@ -79,16 +108,32 @@ export function isOriginator(plan: PlanVm, currentUser: CurrentUserProfileVm | u
   return Boolean(plan.createdById && currentUser?.systemUserId && plan.createdById === currentUser.systemUserId);
 }
 
+function normalizeIdentityValue(value?: string): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isCurrentUserTeamMember(member: TeamMemberVm, currentUser: CurrentUserProfileVm): boolean {
+  const currentUserId = normalizeIdentityValue(currentUser.systemUserId);
+  const memberId = normalizeIdentityValue(member.memberId);
+  if (currentUserId && memberId && memberId === currentUserId) {
+    return true;
+  }
+
+  const currentUserName = normalizeIdentityValue(currentUser.fullName);
+  const memberName = normalizeIdentityValue(member.name);
+  return Boolean(currentUserName && memberName && memberName === currentUserName);
+}
+
 export function hasTeamRole(
   teamMembers: TeamMemberVm[],
   currentUser: CurrentUserProfileVm | undefined,
   roleCode: number,
 ): boolean {
-  if (!currentUser?.systemUserId) {
+  if (!currentUser) {
     return false;
   }
 
-  return teamMembers.some((member) => member.memberId === currentUser.systemUserId && member.roleCode === roleCode);
+  return teamMembers.some((member) => member.roleCode === roleCode && isCurrentUserTeamMember(member, currentUser));
 }
 
 export function getDraftToPlanErrors(
@@ -196,7 +241,7 @@ export function getPlanPhaseCommandState(input: {
   finalSignOff: LifecycleCommandState;
 } {
   const { approvals, checklists, currentUser, deficiencies, plan, teamMembers } = input;
-  const planApproval = findLatestApproval(approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD);
+  const planApproval = findPendingApprovalRequest(approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD, PLAN_APPROVAL_REQUEST_COMMENT);
   const approvalApproval = findLatestApproval(approvals, PLAN_STAGE_APPROVAL, TEAM_ROLE_PU_LEAD);
   const completionApproval = findLatestApproval(approvals, PLAN_STAGE_COMPLETION, TEAM_ROLE_PSSR_LEAD);
   const finalized = isPlanFinalized(approvals);
@@ -235,6 +280,7 @@ export function getPlanPhaseCommandState(input: {
   if (!isApprovalInProgress(approvalApproval)) {
     approvalReasons.push('The latest Approval approval is not in progress.');
   }
+  approvalReasons.push(...getExecutionToApprovalErrors(checklists, deficiencies));
 
   const finalSignOffReasons = finalized
     ? ['Final sign off has already completed.']

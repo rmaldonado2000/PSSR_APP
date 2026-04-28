@@ -183,6 +183,55 @@ function normalizeQuestionResponseCode(value?: number): number | undefined {
     : undefined;
 }
 
+function normalizeChoiceCode(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function getApprovalDecisionLabel(value?: number, label?: string): string {
+  return label?.trim() || lookupName(Crc07_pssr_approvalscrc07_status, value) || (value !== undefined ? 'In Progress' : undefined) || 'In Progress';
+}
+
+function inferApprovalRoleLabel(input: {
+  roleLabel?: string;
+  stageCode?: number;
+  decisionCode?: number;
+  comment?: string;
+  memberId?: string;
+}): string | undefined {
+  if (input.roleLabel?.trim()) {
+    return input.roleLabel.trim();
+  }
+
+  const comment = (input.comment ?? '').trim().toLowerCase();
+  if (
+    input.stageCode === 507650000
+    && input.decisionCode === 507650002
+    && (Boolean(input.memberId) || comment.includes('originator'))
+  ) {
+    return 'Originator';
+  }
+
+  return undefined;
+}
+
+function normalizeApprovalDecisionCode(value: unknown): number | undefined {
+  return normalizeChoiceCode(value);
+}
+
 function normalizeGuid(value?: string): string {
   return (value ?? '').replace(/[{}]/g, '').toLowerCase();
 }
@@ -859,12 +908,12 @@ export async function getDeficienciesByPlan(planId: string): Promise<DeficiencyV
       id: normalizeGuid(item.crc07_pssr_deficiencyid),
       deficiencyId: item.crc07_deficiencyid,
       name: item.crc07_deficiencyname ?? 'Deficiency',
-      initialCategoryCode: item.crc07_initialcategory as number | undefined,
-      initialCategoryLabel: item.crc07_initialcategoryname ?? lookupName(Crc07_pssr_deficienciescrc07_initialcategory, item.crc07_initialcategory as number | undefined),
-      acceptedCategoryCode: item.crc07_acceptedcategory as number | undefined,
-      acceptedCategoryLabel: item.crc07_acceptedcategoryname ?? lookupName(Crc07_pssr_deficienciescrc07_acceptedcategory, item.crc07_acceptedcategory as number | undefined),
-      statusCode: item.crc07_status as number | undefined,
-      statusLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_deficienciescrc07_status, item.crc07_status as number | undefined),
+      initialCategoryCode: normalizeChoiceCode(item.crc07_initialcategory),
+      initialCategoryLabel: item.crc07_initialcategoryname ?? lookupName(Crc07_pssr_deficienciescrc07_initialcategory, normalizeChoiceCode(item.crc07_initialcategory)),
+      acceptedCategoryCode: normalizeChoiceCode(item.crc07_acceptedcategory),
+      acceptedCategoryLabel: item.crc07_acceptedcategoryname ?? lookupName(Crc07_pssr_deficienciescrc07_acceptedcategory, normalizeChoiceCode(item.crc07_acceptedcategory)),
+      statusCode: normalizeChoiceCode(item.crc07_status),
+      statusLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_deficienciescrc07_status, normalizeChoiceCode(item.crc07_status)),
       generalComment: item.crc07_generalcomment,
       closeoutComment: item.crc07_closeoutcomment,
       closedById: normalizeGuid(item._crc07_closed_by_value),
@@ -928,41 +977,96 @@ export async function updateDeficiency(deficiencyId: string, payload: Partial<{
 }
 
 export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> {
-  const rows = await readDataverseRows(
-    Crc07_pssr_approvalsService.getAll({
-    select: [
-      'crc07_pssr_approvalid',
-      'crc07_pssrstage',
-      'crc07_role',
-      'crc07_status',
-      'crc07_date',
-      'crc07_comment',
-      'modifiedon',
-      '_crc07_relatedplan_value',
-    ],
-    top: 5000,
-    orderBy: ['modifiedon desc'],
-    }),
-    'Timed out loading approvals from Dataverse.',
-    'Loading approvals from Dataverse',
-  );
+  let rows: Awaited<ReturnType<typeof Crc07_pssr_approvalsService.getAll>>['data'] = [];
+  let lastApprovalError: unknown;
+  const approvalQueryAttempts: Array<Parameters<typeof Crc07_pssr_approvalsService.getAll>[0]> = [
+    {
+      select: [
+        'crc07_pssr_approvalid',
+        'crc07_pssrstage',
+        'crc07_pssrstagename',
+        'crc07_role',
+        'crc07_rolename',
+        'crc07_status',
+        'crc07_statusname',
+        'crc07_date',
+        'crc07_comment',
+        'modifiedon',
+        '_crc07_member_value',
+        '_crc07_relatedplan_value',
+      ],
+      top: 5000,
+      orderBy: ['modifiedon desc'],
+    },
+    {
+      select: [
+        'crc07_pssr_approvalid',
+        'crc07_pssrstage',
+        'crc07_role',
+        'crc07_status',
+        'crc07_date',
+        'crc07_comment',
+        'modifiedon',
+        '_crc07_member_value',
+        '_crc07_relatedplan_value',
+      ],
+      top: 5000,
+      orderBy: ['modifiedon desc'],
+    },
+  ];
+
+  for (const options of approvalQueryAttempts) {
+    try {
+      const nextRows = await readDataverseRows(
+        Crc07_pssr_approvalsService.getAll(options),
+        'Timed out loading approvals from Dataverse.',
+        'Loading approvals from Dataverse',
+      );
+
+      rows = nextRows;
+      if (rows.length > 0 || options === approvalQueryAttempts[approvalQueryAttempts.length - 1]) {
+        break;
+      }
+    } catch (error) {
+      lastApprovalError = error;
+    }
+  }
+
+  if (rows.length === 0 && lastApprovalError) {
+    throw lastApprovalError;
+  }
 
   const targetPlanId = normalizeGuid(planId);
   return rows
     .filter((item) => normalizeGuid(item._crc07_relatedplan_value) === targetPlanId)
-    .map((item) => ({
-      id: normalizeGuid(item.crc07_pssr_approvalid),
-      planId: normalizeGuid(item._crc07_relatedplan_value),
-      stageCode: item.crc07_pssrstage as number | undefined,
-      stageLabel: item.crc07_pssrstagename ?? lookupName(Crc07_pssr_approvalscrc07_pssrstage, item.crc07_pssrstage as number | undefined),
-      roleCode: item.crc07_role as number | undefined,
-      roleLabel: item.crc07_rolename ?? lookupName(Crc07_pssr_approvalscrc07_role, item.crc07_role as number | undefined),
-      decisionCode: item.crc07_status as number | undefined,
-      decisionLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_approvalscrc07_status, item.crc07_status as number | undefined),
-      approveOn: item.crc07_date,
-      comment: item.crc07_comment,
-      modifiedOn: item.modifiedon,
-    }));
+    .map((item) => {
+      const memberId = normalizeGuid(item._crc07_member_value);
+      const stageCode = normalizeChoiceCode(item.crc07_pssrstage);
+      const roleCode = normalizeChoiceCode(item.crc07_role);
+      const decisionCode = normalizeApprovalDecisionCode(item.crc07_status);
+      const comment = item.crc07_comment;
+
+      return {
+        id: normalizeGuid(item.crc07_pssr_approvalid),
+        planId: normalizeGuid(item._crc07_relatedplan_value),
+        memberId,
+        stageCode,
+        stageLabel: item.crc07_pssrstagename ?? lookupName(Crc07_pssr_approvalscrc07_pssrstage, stageCode),
+        roleCode,
+        roleLabel: inferApprovalRoleLabel({
+          roleLabel: item.crc07_rolename ?? lookupName(Crc07_pssr_approvalscrc07_role, roleCode),
+          stageCode,
+          decisionCode,
+          comment,
+          memberId,
+        }),
+        decisionCode,
+        decisionLabel: getApprovalDecisionLabel(decisionCode, item.crc07_statusname),
+        approveOn: item.crc07_date,
+        comment,
+        modifiedOn: item.modifiedon,
+      };
+    });
 }
 
 export async function createApproval(payload: {
@@ -1037,7 +1141,7 @@ export async function createTeamMember(payload: {
 export async function getTeamByPlan(planId: string): Promise<TeamMemberVm[]> {
   const rows = await readDataverseRows(
     Crc07_pssr_team_membersService.getAll({
-    select: ['crc07_pssr_team_memberid', 'crc07_name', 'crc07_roles', '_crc07_relatedplan_value'],
+    select: ['crc07_pssr_team_memberid', 'crc07_name', 'crc07_roles', '_crc07_member_value', '_crc07_relatedplan_value'],
     top: 5000,
     orderBy: ['modifiedon desc'],
     }),
@@ -1050,6 +1154,7 @@ export async function getTeamByPlan(planId: string): Promise<TeamMemberVm[]> {
     .filter((item) => normalizeGuid(item._crc07_relatedplan_value) === targetPlanId)
     .map((item) => ({
       id: normalizeGuid(item.crc07_pssr_team_memberid),
+      memberId: normalizeGuid(item._crc07_member_value),
       name: item.crc07_name,
       roleCode: item.crc07_roles as number | undefined,
       roleLabel: lookupName(Crc07_pssr_team_memberscrc07_roles, item.crc07_roles as number | undefined),
