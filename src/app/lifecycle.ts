@@ -92,7 +92,7 @@ export function findPendingApprovalRequest(
   )[0];
 }
 
-export function isApprovalInProgress(approval: ApprovalVm | undefined): boolean {
+export function isApprovalInProgress(approval: ApprovalVm | undefined): approval is ApprovalVm {
   return approval !== undefined && !isTerminalApprovalStatus(approval.decisionCode);
 }
 
