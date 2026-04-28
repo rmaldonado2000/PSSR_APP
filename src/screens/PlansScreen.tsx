@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Caption1,
   Card,
@@ -30,9 +29,9 @@ import {
   Tag16Regular,
 } from '@fluentui/react-icons';
 import { useEffect, useState, type ReactNode } from 'react';
-import { getPlanPhaseTone } from '../app/semanticColors';
 import type { PlanVm } from '../app/types';
-import { DataState, GalleryListItem, ResponsiveButton, SectionPanel, StatusChip, VirtualizedList } from '../components/ui';
+import { getCardAccentStyle } from '../components/CardAccent/CardAccent';
+import { DataState, GalleryListItem, Pill, ResponsiveButton, SectionPanel, VirtualizedList } from '../components/ui';
 import { t } from '../app/i18n';
 
 const ALL_OPTION_VALUE = '__all__';
@@ -424,13 +423,11 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
             layout="stack"
             gap="4px"
             row={(plan) => {
-              const phaseTone = getPlanPhaseTone(plan.stageLabel);
-
               return (
                 <GalleryListItem inset>
                   <Card
                     className={styles.planCard}
-                    style={{ borderLeftColor: phaseTone.accentColor }}
+                    style={getCardAccentStyle('phase', plan.stageLabel ?? '')}
                     onClick={() => props.onOpenPlan(plan)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -456,17 +453,11 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
                           </Caption1>
                         </div>
                         <div className={styles.badgesRow}>
-                          <StatusChip value={plan.stageLabel ?? 'No Stage'} tone={phaseTone} icon={<ArrowCircleRight16Regular />} />
-                          <Badge size="small" appearance="tint" color="informative" icon={<Tag16Regular />}>
-                            {plan.typeLabel ?? 'No Type'}
-                          </Badge>
-                          <Badge size="small" appearance="tint" color="subtle" icon={<Location16Regular />}>
-                            {plan.siteLabel ?? 'No Site'}
-                          </Badge>
+                          <Pill kind="phase" value={plan.stageLabel ?? 'No Stage'} icon={<ArrowCircleRight16Regular />} />
+                          <Pill kind="neutral" value={plan.typeLabel ?? 'No Type'} icon={<Tag16Regular />} />
+                          <Pill kind="neutral" value={plan.siteLabel ?? 'No Site'} icon={<Location16Regular />} />
                           {plan.mocName && (
-                            <Badge size="small" appearance="outline" color="warning" icon={<Link16Regular />}>
-                              {plan.mocName.length > 18 ? `${plan.mocName.slice(0, 18)}\u2026` : plan.mocName}
-                            </Badge>
+                            <Pill kind="neutral" value={plan.mocName} icon={<Link16Regular />} />
                           )}
                         </div>
                       </div>

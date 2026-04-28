@@ -1,5 +1,4 @@
 import {
-  Badge,
   Body1,
   Button,
   type ButtonProps,
@@ -15,8 +14,11 @@ import {
 } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactElement, type ReactNode } from 'react';
-import type { SemanticBadgeColor, SemanticTone } from '../app/semanticColors';
+import { getCardAccentColor } from './CardAccent/CardAccent';
+import type { PillKind } from '../ui/tokens/pillTokens';
 import { List } from 'react-window';
+
+export { default as Pill } from './Pill/Pill';
 
 const useStyles = makeStyles({
   pageSection: {
@@ -31,9 +33,6 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusLarge,
     padding: tokens.spacingHorizontalXL,
     backgroundColor: tokens.colorNeutralBackground2,
-  },
-  chip: {
-    textTransform: 'capitalize',
   },
   responsiveButton: {
     whiteSpace: 'nowrap',
@@ -218,33 +217,6 @@ export function SectionPanel(props: {
       )}
       {props.children}
     </Card>
-  );
-}
-
-export function StatusChip(props: {
-  value?: string;
-  appearance?: 'filled' | 'outline' | 'tint';
-  color?: SemanticBadgeColor;
-  icon?: ReactElement;
-  tone?: SemanticTone;
-}): ReactNode {
-  const styles = useStyles();
-  return (
-    <Badge
-      className={styles.chip}
-      appearance={props.appearance ?? 'tint'}
-      color={props.tone ? undefined : (props.color ?? 'informative')}
-      icon={props.icon}
-      style={props.tone ? {
-        backgroundColor: props.tone.chipBackgroundColor,
-        color: props.tone.chipForegroundColor,
-        borderColor: props.tone.accentColor,
-        borderStyle: 'solid',
-        borderWidth: '1px',
-      } : undefined}
-    >
-      {props.value ?? 'N/A'}
-    </Badge>
   );
 }
 
@@ -457,15 +429,21 @@ export function RowCard(props: {
   right?: ReactElement;
   details?: ReactNode;
   icon?: ReactElement;
+  accentKind?: PillKind;
+  accentValue?: string;
   accentColor?: string;
   badges?: ReactNode;
   meta?: Array<{ label: string; value?: ReactNode }>;
 }): ReactNode {
   const styles = useStyles();
+  const accentColor = props.accentKind
+    ? getCardAccentColor(props.accentKind, props.accentValue ?? '')
+    : (props.accentColor ?? tokens.colorNeutralStroke2);
+
   return (
     <Card
       className={styles.rowCard}
-      style={{ borderLeftColor: props.accentColor ?? tokens.colorNeutralStroke2 }}
+      style={{ borderLeftColor: accentColor }}
       onClick={props.onClick}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {

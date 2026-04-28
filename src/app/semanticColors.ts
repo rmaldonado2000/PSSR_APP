@@ -1,6 +1,6 @@
-import { tokens } from '@fluentui/react-components';
+import { getAccentColor, getPillStyle, type PillKind } from '../ui/tokens/pillTokens';
 
-export type SemanticBadgeColor = 'brand' | 'danger' | 'important' | 'informative' | 'severe' | 'subtle' | 'success' | 'warning';
+export type SemanticBadgeColor = 'subtle';
 
 export type SemanticTone = {
   chipColor: SemanticBadgeColor;
@@ -9,119 +9,33 @@ export type SemanticTone = {
   chipForegroundColor: string;
 };
 
-const toneByColor: Record<SemanticBadgeColor, SemanticTone> = {
-  brand: {
-    chipColor: 'brand',
-    accentColor: tokens.colorBrandStroke1,
-    chipBackgroundColor: tokens.colorBrandBackground2,
-    chipForegroundColor: tokens.colorBrandForeground2,
-  },
-  danger: {
-    chipColor: 'danger',
-    accentColor: tokens.colorPaletteRedBorderActive,
-    chipBackgroundColor: tokens.colorPaletteRedBackground2,
-    chipForegroundColor: tokens.colorPaletteRedForeground2,
-  },
-  important: {
-    chipColor: 'important',
-    accentColor: tokens.colorPaletteBerryBorderActive,
-    chipBackgroundColor: tokens.colorPaletteBerryBackground2,
-    chipForegroundColor: tokens.colorPaletteBerryForeground2,
-  },
-  informative: {
-    chipColor: 'informative',
-    accentColor: tokens.colorPaletteBlueBorderActive,
-    chipBackgroundColor: tokens.colorPaletteBlueBackground2,
-    chipForegroundColor: tokens.colorPaletteBlueForeground2,
-  },
-  severe: {
-    chipColor: 'severe',
-    accentColor: tokens.colorPaletteRedBorderActive,
-    chipBackgroundColor: tokens.colorPaletteRedBackground2,
-    chipForegroundColor: tokens.colorPaletteRedForeground2,
-  },
-  subtle: {
+function toSemanticTone(kind: PillKind, value?: string): SemanticTone {
+  const pillStyle = getPillStyle(kind, value ?? '');
+
+  return {
     chipColor: 'subtle',
-    accentColor: tokens.colorNeutralStrokeAccessible,
-    chipBackgroundColor: tokens.colorNeutralBackground3,
-    chipForegroundColor: tokens.colorNeutralForeground3,
-  },
-  success: {
-    chipColor: 'success',
-    accentColor: tokens.colorPaletteGreenBorderActive,
-    chipBackgroundColor: tokens.colorPaletteGreenBackground2,
-    chipForegroundColor: tokens.colorPaletteGreenForeground2,
-  },
-  warning: {
-    chipColor: 'warning',
-    accentColor: tokens.colorPaletteDarkOrangeBorderActive,
-    chipBackgroundColor: tokens.colorPaletteDarkOrangeBackground2,
-    chipForegroundColor: tokens.colorPaletteDarkOrangeForeground2,
-  },
-};
-
-function normalizeLabel(label?: string): string {
-  return (label ?? '').trim().toLowerCase();
-}
-
-function includesAny(label: string, fragments: string[]): boolean {
-  return fragments.some((fragment) => label.includes(fragment));
-}
-
-function toneForPhaseOrStatus(label?: string): SemanticTone {
-  const normalized = normalizeLabel(label);
-
-  if (!normalized) {
-    return toneByColor.subtle;
-  }
-
-  if (includesAny(normalized, ['reject', 'denied', 'declin', 'fail', 'overdue', 'blocked'])) {
-    return toneByColor.danger;
-  }
-
-  if (includesAny(normalized, ['inactive', 'cancel', 'void', 'notstarted', 'not started', 'draft', 'new', 'initiation'])) {
-    return toneByColor.subtle;
-  }
-
-  if (includesAny(normalized, ['approval', 'approved', 'review'])) {
-    return toneByColor.success;
-  }
-
-  if (includesAny(normalized, ['completion', 'complete', 'completed', 'closed', 'resolved'])) {
-    return toneByColor.informative;
-  }
-
-  if (includesAny(normalized, ['plan', 'planning'])) {
-    return toneByColor.important;
-  }
-
-  if (includesAny(normalized, ['execution', 'progress', 'open', 'pending'])) {
-    return toneByColor.warning;
-  }
-
-  if (includesAny(normalized, ['active'])) {
-    return toneByColor.success;
-  }
-
-  return toneByColor.brand;
+    accentColor: getAccentColor(kind, value ?? ''),
+    chipBackgroundColor: pillStyle.bg,
+    chipForegroundColor: pillStyle.text,
+  };
 }
 
 export function getPlanPhaseTone(phaseLabel?: string): SemanticTone {
-  return toneForPhaseOrStatus(phaseLabel);
+  return toSemanticTone('phase', phaseLabel);
 }
 
 export function getChecklistStatusTone(statusLabel?: string): SemanticTone {
-  return toneForPhaseOrStatus(statusLabel);
+  return toSemanticTone('status', statusLabel);
 }
 
 export function getDeficiencyStatusTone(statusLabel?: string): SemanticTone {
-  return toneForPhaseOrStatus(statusLabel);
+  return toSemanticTone('status', statusLabel);
 }
 
 export function getApprovalDecisionTone(decisionLabel?: string): SemanticTone {
-  return toneForPhaseOrStatus(decisionLabel);
+  return toSemanticTone('status', decisionLabel);
 }
 
 export function getTemplateStatusTone(statusLabel?: string): SemanticTone {
-  return toneForPhaseOrStatus(statusLabel);
+  return toSemanticTone('status', statusLabel);
 }

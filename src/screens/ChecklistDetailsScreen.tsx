@@ -1,9 +1,8 @@
 import { Button, Field, Input, MessageBar, ProgressBar, Tab, TabList, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import { Add24Regular, Checkmark24Regular, ClipboardTask24Regular, DismissCircle24Regular, Info24Regular, MoreHorizontal24Regular, Save24Regular, Warning24Filled } from '@fluentui/react-icons';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
-import { getChecklistStatusTone, getDeficiencyStatusTone } from '../app/semanticColors';
 import type { ChecklistVm, DeficiencyVm, PlanVm, QuestionVm } from '../app/types';
-import { DataState, GalleryListItem, ResponsiveButton, RowCard, SectionPanel, StatusChip, VirtualizedList } from '../components/ui';
+import { DataState, GalleryListItem, Pill, ResponsiveButton, RowCard, SectionPanel, VirtualizedList } from '../components/ui';
 import type { ChecklistDetailsTab } from '../app/router';
 
 const MOBILE_TAB_QUERY = '(max-width: 700px)';
@@ -439,7 +438,6 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
     ? props.questions.length
     : props.selectedChecklist.questionTotalCount ?? 0;
   const progressValue = totalQuestionCount > 0 ? answeredQuestionCount / totalQuestionCount : 0;
-  const checklistStatusTone = getChecklistStatusTone(props.selectedChecklist.statusLabel);
   const checklistDeficiencies = useMemo(
     () => props.deficiencies.filter((item) => item.checklistId === props.selectedChecklist.id),
     [props.deficiencies, props.selectedChecklist.id],
@@ -606,8 +604,8 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
         <SectionPanel className={styles.summarySection}>
           <div className={styles.summaryCard}>
             <div className={styles.summaryPills}>
-              <StatusChip value={props.selectedChecklist.disciplineLabel ?? 'No discipline'} color="brand" />
-              <StatusChip value={props.selectedChecklist.statusLabel} tone={checklistStatusTone} />
+              <Pill kind="neutral" value={props.selectedChecklist.disciplineLabel ?? 'No discipline'} />
+              <Pill kind="status" value={props.selectedChecklist.statusLabel ?? 'No Status'} />
             </div>
             <div className={styles.summaryProgress}>
               <Text weight="semibold" className={styles.summaryProgressLabel}>Progress</Text>
@@ -722,17 +720,16 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                   layout="stack"
                   gap="4px"
                   row={(deficiency) => {
-                    const statusTone = getDeficiencyStatusTone(deficiency.statusLabel);
-
                     return (
                       <GalleryListItem>
                         <RowCard
                           key={deficiency.id}
                           title={deficiency.name}
                           subtitle={deficiency.questionName ?? deficiency.deficiencyId ?? 'Deficiency'}
-                          accentColor={statusTone.accentColor}
+                          accentKind="status"
+                          accentValue={deficiency.statusLabel ?? ''}
                           badges={[
-                            <StatusChip key={`${deficiency.id}-status`} value={deficiency.statusLabel} tone={statusTone} />,
+                            <Pill key={`${deficiency.id}-status`} kind="status" value={deficiency.statusLabel ?? 'No Status'} />,
                           ]}
                           meta={[
                             { label: 'Question', value: deficiency.questionName ?? 'N/A' },
@@ -793,7 +790,7 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                           onTouchCancel={resetSwipeState}
                         >
                           <div className={styles.sequenceCell}>
-                            <StatusChip value={String(question.sequenceOrder)} color="brand" />
+                            <Pill kind="neutral" value={String(question.sequenceOrder)} />
                             {question.required && <Text className={styles.requiredIndicator}>*</Text>}
                             {getDeficiencyCount(question) > 0 && (
                               <Button
@@ -805,7 +802,7 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                                 ({getDeficiencyCount(question)})
                               </Button>
                             )}
-                            {isMissingDeficiency(question) && <StatusChip value="Deficiency Missing" color="warning" />}
+                            {isMissingDeficiency(question) && <Pill kind="neutral" value="Deficiency Missing" />}
                           </div>
 
                           <div className={styles.questionContent}>

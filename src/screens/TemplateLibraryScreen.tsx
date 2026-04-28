@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Caption1,
   Card,
@@ -16,9 +15,8 @@ import {
 import { Add24Regular, Copy24Regular, Delete24Regular, Edit24Regular, MoreHorizontal24Regular, Save24Regular } from '@fluentui/react-icons';
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { truncate } from '../app/format';
-import { getTemplateStatusTone } from '../app/semanticColors';
 import type { TemplateChecklistVm, TemplateQuestionVm } from '../app/types';
-import { DataState, ResponsiveButton, RowCard, SectionPanel, StatusChip } from '../components/ui';
+import { DataState, Pill, ResponsiveButton, RowCard, SectionPanel } from '../components/ui';
 
 const useStyles = makeStyles({
   splitLayout: {
@@ -265,7 +263,6 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
               {props.templateRows.map((template) => {
                 const selectedForDetail = props.selectedTemplateId === template.id;
                 const actionsOpen = expandedTemplateActionsId === template.id;
-                const statusTone = getTemplateStatusTone(template.statusLabel);
                 return (
                   <div
                     key={template.id}
@@ -274,12 +271,13 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                     <RowCard
                       title={template.name}
                       subtitle={`${template.disciplineLabel ?? 'No discipline'} | ${template.siteLabel ?? 'No site'}`}
-                      accentColor={statusTone.accentColor}
+                      accentKind="status"
+                      accentValue={template.statusLabel ?? ''}
                       onClick={() => props.onSelectTemplate(template.id)}
                       right={
                         <div className={styles.chipsRow}>
-                          <StatusChip value={template.statusLabel} tone={statusTone} />
-                          <Badge appearance="outline">{template.questionCount} questions</Badge>
+                          <Pill kind="status" value={template.statusLabel ?? 'No Status'} />
+                          <Pill kind="neutral" value={`${template.questionCount} questions`} />
                           <Button
                             appearance="subtle"
                             aria-label={`Open actions for ${template.name}`}
@@ -373,7 +371,7 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                           </div>
                         </div>
                         <div className={styles.chipsRow}>
-                          <Badge appearance="outline">{question.isMandatory ? 'Required' : 'Optional'}</Badge>
+                          <Pill kind="neutral" value={question.isMandatory ? 'Required' : 'Optional'} />
                         </div>
                       </Card>
                     ))}

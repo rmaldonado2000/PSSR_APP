@@ -95,7 +95,6 @@ import {
 } from './app/lifecycleTransitions';
 import { t } from './app/i18n';
 import { formatRoleLabel } from './app/format';
-import { getDeficiencyStatusTone } from './app/semanticColors';
 import { type ChecklistDetailsTab, type AppRouteTab, type PlanDetailsTab, parseHashRoute, updateHashRoute } from './app/router';
 import { trackError, trackFlow, trackView } from './app/telemetry';
 import type {
@@ -111,7 +110,7 @@ import type {
   TemplateChecklistVm,
   TemplateQuestionVm,
 } from './app/types';
-import { ModalHeader, ResponsiveButton, StatusChip } from './components/ui';
+import { ModalHeader, Pill, ResponsiveButton } from './components/ui';
 import './index.css';
 
 const PlansScreen = lazy(() => import('./screens/PlansScreen'));
@@ -2870,18 +2869,8 @@ export default function App() {
             <div className={styles.appHeaderUserText}>
               <Text className={styles.appHeaderUserName}>{currentUser?.fullName?.trim() || 'Loading user...'}</Text>
               <div className={styles.appHeaderUserMeta}>
-                <span className={styles.appHeaderUserMetaBadge}>
-                  <span className={styles.appHeaderUserMetaText}>
-                    <Briefcase16Regular />
-                    {formatRoleLabel(currentUser?.roleLabel)}
-                  </span>
-                </span>
-                <span className={styles.appHeaderUserMetaBadge}>
-                  <span className={styles.appHeaderUserMetaText}>
-                    <Building16Regular />
-                    {currentUser?.siteLabel?.trim() || 'Site unavailable'}
-                  </span>
-                </span>
+                <Pill kind="neutral" value={formatRoleLabel(currentUser?.roleLabel)} icon={<Briefcase16Regular />} />
+                <Pill kind="neutral" value={currentUser?.siteLabel?.trim() || 'Site unavailable'} icon={<Building16Regular />} />
               </div>
               <Caption1 className={styles.appHeaderUserUpn}>{currentUser?.userPrincipalName?.trim() || ' '}</Caption1>
             </div>
@@ -2889,18 +2878,8 @@ export default function App() {
               <div className={styles.appHeaderUserMobilePanel}>
                 <Caption1 className={styles.appHeaderUserMobileEmail}>{currentUser?.userPrincipalName?.trim() || 'Email unavailable'}</Caption1>
                 <div className={styles.appHeaderUserMobileMeta}>
-                  <span className={styles.appHeaderUserMetaBadge}>
-                    <span className={styles.appHeaderUserMetaText}>
-                      <Briefcase16Regular />
-                      {formatRoleLabel(currentUser?.roleLabel)}
-                    </span>
-                  </span>
-                  <span className={styles.appHeaderUserMetaBadge}>
-                    <span className={styles.appHeaderUserMetaText}>
-                      <Building16Regular />
-                      {currentUser?.siteLabel?.trim() || 'Site unavailable'}
-                    </span>
-                  </span>
+                  <Pill kind="neutral" value={formatRoleLabel(currentUser?.roleLabel)} icon={<Briefcase16Regular />} />
+                  <Pill kind="neutral" value={currentUser?.siteLabel?.trim() || 'Site unavailable'} icon={<Building16Regular />} />
                 </div>
               </div>
             )}
@@ -3175,8 +3154,6 @@ export default function App() {
 
                   <div className={styles.deficiencyList}>
                     {associatedQuestionDeficiencies.map((deficiency) => {
-                      const statusTone = getDeficiencyStatusTone(deficiency.statusLabel);
-
                       return (
                         <Card
                           key={deficiency.id}
@@ -3186,11 +3163,11 @@ export default function App() {
                         >
                           <div className={styles.deficiencyListHeader}>
                             <Text weight="semibold">{deficiency.name || 'Untitled deficiency'}</Text>
-                            <StatusChip value={deficiency.statusLabel} tone={statusTone} />
+                            <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
                           </div>
                           <div className={styles.deficiencyListMeta}>
-                            <StatusChip value={`Init ${deficiency.initialCategoryLabel ?? 'N/A'}`} color="informative" />
-                            <StatusChip value={`Acc ${deficiency.acceptedCategoryLabel ?? 'N/A'}`} color="brand" />
+                            <Pill kind="neutral" value={`Init ${deficiency.initialCategoryLabel ?? 'N/A'}`} />
+                            <Pill kind="neutral" value={`Acc ${deficiency.acceptedCategoryLabel ?? 'N/A'}`} />
                           </div>
                           <Caption1>{deficiency.generalComment?.trim() || 'No general comment'}</Caption1>
                         </Card>

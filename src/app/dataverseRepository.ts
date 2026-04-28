@@ -202,7 +202,27 @@ function normalizeChoiceCode(value: unknown): number | undefined {
 }
 
 function getApprovalDecisionLabel(value?: number, label?: string): string {
-  return label?.trim() || lookupName(Crc07_pssr_approvalscrc07_status, value) || (value !== undefined ? 'In Progress' : undefined) || 'In Progress';
+  return normalizeStatusLabel(label ?? lookupName(Crc07_pssr_approvalscrc07_status, value), value !== undefined ? 'In Progress' : undefined);
+}
+
+function normalizeStatusLabel(label?: string, fallback?: string): string {
+  const normalizedLabel = (label ?? '').trim();
+
+  if (!normalizedLabel) {
+    return fallback ?? 'In Progress';
+  }
+
+  const compactLabel = normalizedLabel.replace(/[\s_-]+/g, '').toLowerCase();
+
+  if (compactLabel === 'inprogress') {
+    return 'In Progress';
+  }
+
+  if (compactLabel === 'notstarted') {
+    return 'Not Started';
+  }
+
+  return normalizedLabel;
 }
 
 function inferApprovalRoleLabel(input: {
@@ -757,7 +777,10 @@ export async function getPlanChecklists(planId: string): Promise<ChecklistVm[]> 
         disciplineCode: item.crc07_discipline as number | undefined,
         disciplineLabel: item.crc07_disciplinename ?? lookupName(Crc07_pssr_checklistscrc07_discipline, item.crc07_discipline as number | undefined),
         statusCode: item.crc07_status as number | undefined,
-        statusLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_checklistscrc07_status, item.crc07_status as number | undefined),
+        statusLabel: normalizeStatusLabel(
+          item.crc07_statusname ?? lookupName(Crc07_pssr_checklistscrc07_status, item.crc07_status as number | undefined),
+          item.crc07_status !== undefined ? 'In Progress' : undefined,
+        ),
         planId: normalizeGuid(item._crc07_relatedplan_value),
         questionTotalCount: questionTotalCounts.get(id) ?? 0,
         questionCompletedCount: questionCompletedCounts.get(id) ?? 0,
@@ -913,7 +936,10 @@ export async function getDeficienciesByPlan(planId: string): Promise<DeficiencyV
       acceptedCategoryCode: normalizeChoiceCode(item.crc07_acceptedcategory),
       acceptedCategoryLabel: item.crc07_acceptedcategoryname ?? lookupName(Crc07_pssr_deficienciescrc07_acceptedcategory, normalizeChoiceCode(item.crc07_acceptedcategory)),
       statusCode: normalizeChoiceCode(item.crc07_status),
-      statusLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_deficienciescrc07_status, normalizeChoiceCode(item.crc07_status)),
+      statusLabel: normalizeStatusLabel(
+        item.crc07_statusname ?? lookupName(Crc07_pssr_deficienciescrc07_status, normalizeChoiceCode(item.crc07_status)),
+        normalizeChoiceCode(item.crc07_status) !== undefined ? 'In Progress' : undefined,
+      ),
       generalComment: item.crc07_generalcomment,
       closeoutComment: item.crc07_closeoutcomment,
       closedById: normalizeGuid(item._crc07_closed_by_value),

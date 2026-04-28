@@ -1,11 +1,10 @@
-import { Badge, Button, Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
+import { Button, Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, MoreHorizontal24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
 import { Fragment, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { formatDate, formatRoleLabel, truncate } from '../app/format';
 import { isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
-import { getApprovalDecisionTone, getChecklistStatusTone, getDeficiencyStatusTone, getPlanPhaseTone } from '../app/semanticColors';
 import type { ApprovalVm, ChecklistVm, DeficiencyVm, PlanDetailsDraftVm, PlanVm, TeamMemberVm } from '../app/types';
-import { DataState, GalleryListItem, ResponsiveButton, RowCard, SectionPanel, StatusChip, VirtualizedList } from '../components/ui';
+import { DataState, GalleryListItem, Pill, ResponsiveButton, RowCard, SectionPanel, VirtualizedList } from '../components/ui';
 import type { PlanDetailsTab } from '../app/router';
 
 const MOBILE_TAB_QUERY = '(max-width: 700px)';
@@ -464,9 +463,9 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
             </div>
 
             <div className={styles.summaryMeta}>
-              <StatusChip
+              <Pill
+                kind="neutral"
                 value={`${props.selectedPlan.checklistCompletedCount}/${props.selectedPlan.checklistTotalCount} ${props.selectedPlan.checklistTotalCount === 1 ? 'Checklist' : 'Checklists'}`}
-                color="brand"
               />
               <div className={styles.summaryProgress}>
                 <ProgressBar value={progressValue} thickness="medium" className={styles.summaryProgressBar} />
@@ -662,21 +661,18 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
               fillHeight
               layout="stack"
               gap="4px"
-              row={(checklist) => {
-                const statusTone = getChecklistStatusTone(checklist.statusLabel);
-
-                return (
+                row={(checklist) => {
+                  return (
                   <GalleryListItem>
                     <RowCard
                       title={checklist.name}
                       icon={<ClipboardTask24Regular />}
-                      accentColor={statusTone.accentColor}
+                        accentKind="status"
+                        accentValue={checklist.statusLabel ?? ''}
                       badges={(
                         <>
-                          <StatusChip value={checklist.statusLabel ?? 'No Status'} tone={statusTone} icon={<Info24Regular />} />
-                          <Badge size="small" appearance="tint" color="informative" icon={<Tag16Regular />}>
-                            {checklist.disciplineLabel ?? 'No Discipline'}
-                          </Badge>
+                          <Pill kind="status" value={checklist.statusLabel ?? 'No Status'} />
+                            <Pill kind="neutral" value={checklist.disciplineLabel ?? 'No Discipline'} icon={<Tag16Regular />} />
                         </>
                       )}
                       meta={[
@@ -720,17 +716,16 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
               fillHeight
               layout="stack"
               gap="4px"
-              row={(deficiency) => {
-                const statusTone = getDeficiencyStatusTone(deficiency.statusLabel);
-
-                return (
+                row={(deficiency) => {
+                  return (
                   <GalleryListItem>
                     <RowCard
                       title={deficiency.name}
                       subtitle={deficiency.questionName ?? deficiency.deficiencyId ?? 'Deficiency'}
-                      accentColor={statusTone.accentColor}
+                        accentKind="status"
+                        accentValue={deficiency.statusLabel ?? ''}
                       badges={(
-                        <StatusChip value={deficiency.statusLabel ?? 'No Status'} tone={statusTone} />
+                          <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
                       )}
                       meta={[
                         { label: 'Question', value: deficiency.questionName ?? 'N/A' },
@@ -761,20 +756,18 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
               fillHeight
               layout="stack"
               gap="4px"
-              row={(approval) => {
-                const decisionTone = getApprovalDecisionTone(approval.decisionLabel);
-                const phaseTone = getPlanPhaseTone(approval.stageLabel);
-
-                return (
+                row={(approval) => {
+                  return (
                   <GalleryListItem>
                     <RowCard
                       title={formatRoleLabel(approval.roleLabel, 'Role not set')}
                       icon={<TableMoveAbove24Regular />}
-                      accentColor={decisionTone.accentColor}
+                        accentKind="status"
+                        accentValue={approval.decisionLabel ?? ''}
                       badges={(
                         <>
-                          <StatusChip value={approval.decisionLabel ?? 'In Progress'} tone={decisionTone} icon={<Info24Regular />} />
-                          <StatusChip value={approval.stageLabel ?? 'No Phase'} tone={phaseTone} icon={<Tag16Regular />} />
+                          <Pill kind="status" value={approval.decisionLabel ?? 'In Progress'} />
+                            <Pill kind="phase" value={approval.stageLabel ?? 'No Phase'} icon={<Tag16Regular />} />
                         </>
                       )}
                       meta={[
@@ -813,11 +806,10 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                   <RowCard
                     title={member.name ?? 'Unnamed member'}
                     icon={<Person24Regular />}
-                    accentColor={tokens.colorPaletteBlueBorderActive}
+                    accentKind="neutral"
+                    accentValue={formatRoleLabel(member.roleLabel, 'Role not assigned')}
                     badges={(
-                      <Badge size="small" appearance="tint" color="brand" icon={<Tag16Regular />}>
-                        {formatRoleLabel(member.roleLabel, 'Role not assigned')}
-                      </Badge>
+                      <Pill kind="neutral" value={formatRoleLabel(member.roleLabel, 'Role not assigned')} icon={<Tag16Regular />} />
                     )}
                   />
                 </GalleryListItem>
