@@ -212,6 +212,7 @@ export async function getPlans(): Promise<PlanVm[]> {
         'crc07_mocname',
         'crc07_projectname',
         'crc07_tarevisionname',
+        '_createdby_value',
       ],
       top: 5000,
     },
@@ -429,6 +430,7 @@ export async function getPlans(): Promise<PlanVm[]> {
 
     return {
       id,
+      createdById: normalizeGuid(plan._createdby_value),
       planId: plan.crc07_planid ?? id,
       name: plan.crc07_name ?? 'Untitled Plan',
       event: plan.crc07_event,
@@ -606,6 +608,7 @@ export async function getCurrentUserProfile(criteria: {
   const result = await withReadTimeout(
     dataverseClient.retrieveMultipleRecordsAsync<SystemUserRow>('systemusers', {
       select: [
+        'systemuserid',
         'fullname',
         'internalemailaddress',
         'isdisabled',
@@ -642,6 +645,7 @@ export async function getCurrentUserProfile(criteria: {
   }
 
   return {
+    systemUserId: normalizeGuid(matchedUser.systemuserid),
     fullName: matchedUser.fullname?.trim() || criteria.fallbackFullName?.trim() || 'Unknown user',
     userPrincipalName: matchedUser.internalemailaddress?.trim() || criteria.userPrincipalName?.trim() || '',
     roleLabel: matchedUser.crc07_rolename ?? lookupName(Systemuserscrc07_role, matchedUser.crc07_role),
@@ -790,6 +794,9 @@ export async function getDeficienciesByPlan(planId: string): Promise<DeficiencyV
         'crc07_acceptedcategory',
         'crc07_status',
         'crc07_generalcomment',
+        'crc07_closeoutcomment',
+        'crc07_closedon',
+        '_crc07_closed_by_value',
         '_crc07_relatedplan_value',
         '_crc07_relatedchecklist_value',
         '_crc07_relatedquestion_value',
@@ -859,6 +866,9 @@ export async function getDeficienciesByPlan(planId: string): Promise<DeficiencyV
       statusCode: item.crc07_status as number | undefined,
       statusLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_deficienciescrc07_status, item.crc07_status as number | undefined),
       generalComment: item.crc07_generalcomment,
+      closeoutComment: item.crc07_closeoutcomment,
+      closedById: normalizeGuid(item._crc07_closed_by_value),
+      closedOn: item.crc07_closedon,
       planId: normalizeGuid(item._crc07_relatedplan_value),
       checklistId: normalizeGuid(item._crc07_relatedchecklist_value),
       checklistName: checklistById.get(normalizeGuid(item._crc07_relatedchecklist_value))?.name ?? item.crc07_relatedchecklistname,
@@ -899,6 +909,9 @@ export async function updateDeficiency(deficiencyId: string, payload: Partial<{
   acceptedCategoryCode: number;
   statusCode: number;
   generalComment: string;
+  closeoutComment: string;
+  closedOn: string;
+  closedById: string;
 }>): Promise<void> {
   await withMutationRetry(async () => {
     await Crc07_pssr_deficienciesService.update(deficiencyId, {
@@ -907,6 +920,9 @@ export async function updateDeficiency(deficiencyId: string, payload: Partial<{
       crc07_acceptedcategory: payload.acceptedCategoryCode as never,
       crc07_status: payload.statusCode as never,
       crc07_generalcomment: payload.generalComment,
+      crc07_closeoutcomment: payload.closeoutComment,
+      crc07_closedon: payload.closedOn,
+      'crc07_Closed_By@odata.bind': payload.closedById ? `/systemusers(${normalizeGuid(payload.closedById)})` : undefined,
     });
   });
 }
@@ -921,6 +937,7 @@ export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> 
       'crc07_status',
       'crc07_date',
       'crc07_comment',
+      'modifiedon',
       '_crc07_relatedplan_value',
     ],
     top: 5000,
@@ -944,7 +961,58 @@ export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> 
       decisionLabel: item.crc07_statusname ?? lookupName(Crc07_pssr_approvalscrc07_status, item.crc07_status as number | undefined),
       approveOn: item.crc07_date,
       comment: item.crc07_comment,
+      modifiedOn: item.modifiedon,
     }));
+}
+
+export async function createApproval(payload: {
+  planId: string;
+  stageCode: number;
+  roleCode?: number;
+  statusCode?: number;
+  comment?: string;
+  memberId?: string;
+  approveOn?: string;
+}): Promise<string> {
+  const createPayload = {
+    crc07_pssrstage: payload.stageCode as never,
+    crc07_role: payload.roleCode as never,
+    crc07_status: payload.statusCode as never,
+    crc07_comment: payload.comment,
+    crc07_date: payload.approveOn,
+    'crc07_Member@odata.bind': payload.memberId ? `/systemusers(${normalizeGuid(payload.memberId)})` : undefined,
+    'crc07_RelatedPlan@odata.bind': `/crc07_pssr_plans(${normalizeGuid(payload.planId)})`,
+  };
+
+  const result = await withMutationRetry(async () => {
+    return Crc07_pssr_approvalsService.create(createPayload as unknown as Parameters<typeof Crc07_pssr_approvalsService.create>[0]);
+  });
+
+  return normalizeGuid(result.data?.crc07_pssr_approvalid ?? '');
+}
+
+export async function updateApproval(approvalId: string, payload: Partial<{
+  statusCode: number;
+  comment: string;
+  approveOn: string;
+}>): Promise<void> {
+  await withMutationRetry(async () => {
+    await Crc07_pssr_approvalsService.update(approvalId, {
+      crc07_status: payload.statusCode as never,
+      crc07_comment: payload.comment,
+      crc07_date: payload.approveOn,
+    });
+  });
+}
+
+export async function updateChecklist(checklistId: string, payload: Partial<{
+  statusCode: number;
+}>): Promise<void> {
+  await withMutationRetry(async () => {
+    await Crc07_pssr_checklistsService.update(checklistId, {
+      crc07_status: payload.statusCode as never,
+    });
+  });
 }
 
 export async function createTeamMember(payload: {

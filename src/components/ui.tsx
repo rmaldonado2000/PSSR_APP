@@ -9,8 +9,6 @@ import {
   makeStyles,
   mergeClasses,
   MessageBar,
-  MessageBarBody,
-  MessageBarTitle,
   Spinner,
   Subtitle2,
   tokens,
@@ -271,10 +269,8 @@ export function DataState(props: {
   if (props.error) {
     return (
       <MessageBar intent="error">
-        <MessageBarBody>
-          <MessageBarTitle>Something went wrong</MessageBarTitle>
-          {props.error}
-        </MessageBarBody>
+        <strong>Something went wrong</strong>
+        <div>{props.error}</div>
       </MessageBar>
     );
   }

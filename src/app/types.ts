@@ -1,6 +1,7 @@
 export type AppView = 'plans' | 'plan-details' | 'checklist-details' | 'template-library';
 
 export interface CurrentUserProfileVm {
+  systemUserId?: string;
   fullName: string;
   userPrincipalName: string;
   roleLabel?: string;
@@ -9,6 +10,7 @@ export interface CurrentUserProfileVm {
 
 export interface PlanVm {
   id: string;
+  createdById?: string;
   planId: string;
   name: string;
   event?: string;
@@ -76,6 +78,9 @@ export interface DeficiencyVm {
   statusCode?: number;
   statusLabel?: string;
   generalComment?: string;
+  closeoutComment?: string;
+  closedById?: string;
+  closedOn?: string;
 }
 
 export interface ApprovalVm {
@@ -89,10 +94,12 @@ export interface ApprovalVm {
   decisionLabel?: string;
   approveOn?: string;
   comment?: string;
+  modifiedOn?: string;
 }
 
 export interface TeamMemberVm {
   id: string;
+  memberId?: string;
   name?: string;
   roleCode?: number;
   roleLabel?: string;

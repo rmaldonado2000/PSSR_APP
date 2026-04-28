@@ -1,5 +1,5 @@
-import { Button, Field, Input, ProgressBar, Tab, TabList, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
-import { Add24Regular, ClipboardTask24Regular, DismissCircle24Regular, Info24Regular, MoreHorizontal24Regular, Save24Regular, Warning24Filled } from '@fluentui/react-icons';
+import { Button, Field, Input, MessageBar, ProgressBar, Tab, TabList, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
+import { Add24Regular, Checkmark24Regular, ClipboardTask24Regular, DismissCircle24Regular, Info24Regular, MoreHorizontal24Regular, Save24Regular, Warning24Filled } from '@fluentui/react-icons';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { getChecklistStatusTone, getDeficiencyStatusTone } from '../app/semanticColors';
 import type { ChecklistVm, DeficiencyVm, PlanVm, QuestionVm } from '../app/types';
@@ -377,6 +377,14 @@ export interface ChecklistDetailsScreenProps {
   hasPendingChanges: boolean;
   pendingResponseCount: number;
   isSavingResponses: boolean;
+  isQuestionAnsweringEnabled: boolean;
+  questionAnsweringTitle?: string;
+  warningMessages: string[];
+  canCreateDeficiency: boolean;
+  deficiencyActionTitle?: string;
+  canCompleteChecklist: boolean;
+  completeChecklistTitle?: string;
+  onCompleteChecklist: () => void;
   onQuestionAnswer: (question: QuestionVm, responseCode: number) => void;
   onSaveResponses: () => void;
   onQuestionCommentChange: (questionId: string, comment: string) => void;
@@ -626,6 +634,14 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
             </TabList>
 
             <div className={styles.tabActions}>
+              <ResponsiveButton
+                appearance="secondary"
+                icon={<Checkmark24Regular />}
+                label="Complete"
+                disabled={!props.canCompleteChecklist}
+                title={props.completeChecklistTitle}
+                onClick={props.onCompleteChecklist}
+              />
               {overflowTabs.length > 0 && (
                 <>
                   <Button
@@ -658,6 +674,13 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
               )}
             </div>
           </div>
+
+          {props.warningMessages.length > 0 && (
+            <MessageBar intent="warning">
+              <strong>Lifecycle conditions not met</strong>
+              <div>{props.warningMessages.join(' ')}</div>
+            </MessageBar>
+          )}
 
           {props.checklistTab === 'details' && (
             <SectionPanel title="Checklist Details">
@@ -797,6 +820,8 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                                   className={styles.deficiencyHintButton}
                                   icon={<Add24Regular />}
                                   label="Create deficiency"
+                                  disabled={!props.canCreateDeficiency}
+                                  title={props.deficiencyActionTitle}
                                   onClick={() => props.onAddDeficiency(question)}
                                 />
                               </div>
@@ -812,7 +837,8 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                                   styles.answerButton,
                                   question.responseCode === option.key ? getActiveButtonClassName(option.label) : '',
                                 )}
-                                disabled={false}
+                                disabled={!props.isQuestionAnsweringEnabled}
+                                title={props.questionAnsweringTitle}
                                 onClick={() => props.onQuestionAnswer(question, option.key)}
                               >
                                 {option.label}
@@ -836,7 +862,8 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                       appearance="primary"
                       icon={<Save24Regular />}
                       label={props.isSavingResponses ? 'Saving...' : 'Save Responses'}
-                      disabled={!props.hasPendingChanges || props.loading || props.isSavingResponses}
+                      disabled={!props.isQuestionAnsweringEnabled || !props.hasPendingChanges || props.loading || props.isSavingResponses}
+                      title={props.questionAnsweringTitle}
                       onClick={props.onSaveResponses}
                     />
                   </div>

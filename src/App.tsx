@@ -4,7 +4,6 @@ import {
   Card,
   Combobox,
   Dialog,
-  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
@@ -25,9 +24,10 @@ import {
   webLightTheme,
 } from '@fluentui/react-components';
 import { getContext } from '@microsoft/power-apps/app';
-import { Add24Regular, ArrowCircleRight16Regular, Briefcase16Regular, Building16Regular, CheckmarkCircle16Regular, ChevronDown16Regular, ChevronRight12Regular, ClipboardTask16Regular, Delete24Regular, DocumentEdit16Regular, DocumentMultiple24Regular, Home24Regular, Save24Regular, Trophy16Regular, Wrench16Regular } from '@fluentui/react-icons';
-import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Add24Regular, ArrowCircleRight16Regular, Briefcase16Regular, Building16Regular, CheckmarkCircle16Regular, ChevronDown16Regular, ChevronRight12Regular, ClipboardTask16Regular, Delete24Regular, DocumentMultiple24Regular, Home24Regular, Save24Regular, Wrench16Regular } from '@fluentui/react-icons';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  createApproval,
   copyTemplatesToPlan,
   createTeamMember,
   createTemplateChecklist,
@@ -54,10 +54,45 @@ import {
   type PlanLookupOptionVm,
   updateTemplateChecklist,
   updateTemplateQuestion,
+  updateApproval,
   updateDeficiency,
+  updateChecklist,
   updatePlan,
   updateQuestionResponse,
 } from './app/dataverseRepository';
+import {
+  APPROVAL_STATUS_APPROVED,
+  CHECKLIST_STATUS_COMPLETE,
+  canCreateDeficiency,
+  canEditDeficiency,
+  DEFICIENCY_STATUS_IN_PROGRESS,
+  findLatestApproval,
+  getChecklistCompleteErrors,
+  getPlanPhaseCommandState,
+  isChecklistStructureEditable,
+  isPlanApproved,
+  isPlanFinalized,
+  isPlanMetadataEditable,
+  isQuestionAnsweringEnabled,
+  isTeamEditable,
+  PLAN_STAGE_DRAFT,
+  PLAN_STAGE_APPROVAL,
+  PLAN_STAGE_COMPLETION,
+  PLAN_STAGE_PLAN,
+  TEAM_ROLE_PSSR_LEAD,
+} from './app/lifecycle';
+import {
+  advanceDraftToPlan,
+  advanceExecutionToApproval,
+  approveApprovalStage,
+  approvePlanStage,
+  closeDeficiency,
+  completeChecklist,
+  finalSignOff,
+  rejectApprovalStage,
+  rejectPlanStage,
+  triggerExecutionPhase as runExecutionTransition,
+} from './app/lifecycleTransitions';
 import { t } from './app/i18n';
 import { getDeficiencyStatusTone } from './app/semanticColors';
 import { type ChecklistDetailsTab, type AppRouteTab, type PlanDetailsTab, parseHashRoute, updateHashRoute } from './app/router';
@@ -700,6 +735,10 @@ function getChecklistHeaderIcon(statusLabel: string | undefined) {
   return <ArrowCircleRight16Regular />;
 }
 
+function getPlanHeaderIcon(stageLabel: string | undefined) {
+  return getChecklistHeaderIcon(stageLabel);
+}
+
 type DeficiencyPopoutMode = 'editor' | 'list';
 
 const PLAN_TYPE_CODES = {
@@ -707,9 +746,6 @@ const PLAN_TYPE_CODES = {
   turnaround: 507650001,
   project: 507650002,
 } as const;
-
-const PLAN_STAGE_DRAFT = 507650000;
-const DEFICIENCY_STATUS_IN_PROGRESS = 507650001;
 
 function enumOptions(record: Record<number, string>): Array<{ key: number; label: string }> {
   return Object.entries(record).map(([key, label]) => ({ key: Number(key), label }));
@@ -959,16 +995,19 @@ export default function App() {
   const [isTemplateQuestionOpen, setIsTemplateQuestionOpen] = useState<boolean>(false);
   const [templateQuestionDraft, setTemplateQuestionDraft] = useState<TemplateQuestionDraft>(createTemplateQuestionDraft());
   const [isChecklistTemplatePickerOpen, setIsChecklistTemplatePickerOpen] = useState<boolean>(false);
+  const [isPlanSummaryExpanded, setIsPlanSummaryExpanded] = useState<boolean>(() => !getIsMobileBreadcrumbLayout());
   const [isChecklistSummaryExpanded, setIsChecklistSummaryExpanded] = useState<boolean>(() => !getIsMobileBreadcrumbLayout());
 
   const [isDeficiencyOpen, setIsDeficiencyOpen] = useState<boolean>(false);
   const [deficiencyPopoutMode, setDeficiencyPopoutMode] = useState<DeficiencyPopoutMode>('editor');
   const [deficiencyQuestionId, setDeficiencyQuestionId] = useState<string>('');
   const [deficiencyChecklistId, setDeficiencyChecklistId] = useState<string>('');
+  const [isDeficiencyCloseDialogOpen, setIsDeficiencyCloseDialogOpen] = useState<boolean>(false);
+  const [deficiencyCloseComment, setDeficiencyCloseComment] = useState<string>('');
   const [deficiencyDraft, setDeficiencyDraft] = useState<DeficiencyDraft>({
     name: '',
     initialCategoryCode: 507650001,
-    acceptedCategoryCode: 507650001,
+    acceptedCategoryCode: undefined,
     statusCode: 507650000,
     generalComment: '',
   });
@@ -1003,9 +1042,6 @@ export default function App() {
   const deficiencyStatusOptions = useMemo(() => enumOptions(optionSets.deficiencyStatus), []);
   const deficiencyCategoryOptions = useMemo(() => enumOptions(optionSets.deficiencyCategory), []);
   const isAcceptedCategoryEnabled = deficiencyDraft.statusCode === DEFICIENCY_STATUS_IN_PROGRESS;
-  const canSaveDeficiency = deficiencyDraft.name.trim().length > 0;
-  const canSaveTeamMember = Boolean(selectedPlan && teamMemberDraft.memberId && teamMemberDraft.roleCode !== undefined);
-  const isPlanEditable = selectedPlan?.stageCode === PLAN_STAGE_DRAFT;
 
   const hasPlanDetailsChanges = selectedPlan !== undefined && (
     selectedPlan.name !== planDetailsDraft.name
@@ -1049,6 +1085,118 @@ export default function App() {
     () => questions.find((item) => item.id === deficiencyQuestionId),
     [deficiencyQuestionId, questions],
   );
+  const activeDeficiencyRecord = useMemo(
+    () => deficiencies.find((item) => item.id === deficiencyDraft.id),
+    [deficiencies, deficiencyDraft.id],
+  );
+  const selectedPlanLifecycleContext = useMemo(() => {
+    if (!selectedPlan) {
+      return undefined;
+    }
+
+    return {
+      plan: selectedPlan,
+      approvals,
+      checklists,
+      deficiencies,
+      teamMembers,
+      currentUser,
+    };
+  }, [approvals, checklists, currentUser, deficiencies, selectedPlan, teamMembers]);
+  const lifecycleDependencies = useMemo(() => ({
+    updatePlan,
+    updateChecklist,
+    createApproval,
+    updateApproval,
+    updateDeficiency,
+  }), []);
+  const isPlanEditable = selectedPlan ? isPlanMetadataEditable(selectedPlan, approvals) : false;
+  const canManageChecklistStructure = selectedPlan ? isChecklistStructureEditable(selectedPlan, approvals) : false;
+  const canManageTeam = selectedPlan ? isTeamEditable(selectedPlan, approvals) : false;
+  const isQuestionEditingEnabled = selectedPlan && selectedChecklist
+    ? isQuestionAnsweringEnabled(selectedPlan, approvals, selectedChecklist)
+    : false;
+  const canCreateDeficiencyForActiveQuestion = selectedPlan && activeDeficiencyQuestion
+    ? canCreateDeficiency(selectedPlan, approvals, activeDeficiencyQuestion)
+    : false;
+  const isActiveDeficiencyEditable = selectedPlan && activeDeficiencyRecord
+    ? canEditDeficiency(selectedPlan, approvals, activeDeficiencyRecord)
+    : false;
+  const isDeficiencyDraftEditable = deficiencyDraft.id ? isActiveDeficiencyEditable : canCreateDeficiencyForActiveQuestion;
+  const questionAnsweringTitle = useMemo(() => {
+    if (!selectedPlan || !selectedChecklist) {
+      return undefined;
+    }
+
+    if (selectedChecklist.statusCode === CHECKLIST_STATUS_COMPLETE) {
+      return 'Question answers are locked after the checklist is Complete.';
+    }
+
+    if (isPlanFinalized(approvals)) {
+      return 'All records are locked after final sign off.';
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_DRAFT || (selectedPlan.stageCode === PLAN_STAGE_PLAN && !isPlanApproved(approvals))) {
+      return 'Question answering is locked until the Plan phase has been approved.';
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_APPROVAL || selectedPlan.stageCode === PLAN_STAGE_COMPLETION) {
+      return 'Question answering is locked outside of the approved Plan and Execution phases.';
+    }
+
+    return undefined;
+  }, [approvals, selectedChecklist, selectedPlan]);
+  const checklistCompleteReasons = useMemo(() => {
+    if (!selectedChecklist) {
+      return [] as string[];
+    }
+
+    return getChecklistCompleteErrors(questions, deficiencies, selectedChecklist.id);
+  }, [deficiencies, questions, selectedChecklist]);
+  const canCompleteCurrentChecklist = Boolean(
+    selectedChecklist
+    && selectedChecklist.statusCode !== CHECKLIST_STATUS_COMPLETE
+    && checklistCompleteReasons.length === 0
+    && isQuestionEditingEnabled,
+  );
+  const checklistCompleteTitle = selectedChecklist?.statusCode === CHECKLIST_STATUS_COMPLETE
+    ? 'Checklist is already Complete.'
+    : checklistCompleteReasons.length > 0
+      ? checklistCompleteReasons.join(' ')
+      : !isQuestionEditingEnabled
+        ? questionAnsweringTitle
+        : undefined;
+  const selectedPlanCommandState = selectedPlanLifecycleContext
+    ? getPlanPhaseCommandState(selectedPlanLifecycleContext)
+    : undefined;
+  const planWarningMessages = useMemo(() => {
+    if (!selectedPlanCommandState || !selectedPlan) {
+      return [] as string[];
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_DRAFT) {
+      return selectedPlanCommandState.advanceToPlan.enabled ? [] : selectedPlanCommandState.advanceToPlan.reasons;
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_PLAN || selectedPlan.stageCode === PLAN_STAGE_APPROVAL) {
+      return selectedPlanCommandState.approve.enabled ? [] : selectedPlanCommandState.approve.reasons;
+    }
+
+    if (selectedPlan.stageCode === 507650002) {
+      return selectedPlanCommandState.advanceToApproval.enabled ? [] : selectedPlanCommandState.advanceToApproval.reasons;
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_COMPLETION) {
+      return selectedPlanCommandState.finalSignOff.enabled ? [] : selectedPlanCommandState.finalSignOff.reasons;
+    }
+
+    return [] as string[];
+  }, [selectedPlan, selectedPlanCommandState]);
+  const canSaveDeficiency = deficiencyDraft.name.trim().length > 0
+    && (deficiencyDraft.generalComment ?? '').trim().length > 0
+    && deficiencyDraft.initialCategoryCode !== undefined
+    && isDeficiencyDraftEditable;
+  const canSaveTeamMember = Boolean(selectedPlan && teamMemberDraft.memberId && teamMemberDraft.roleCode !== undefined);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1231,6 +1379,129 @@ export default function App() {
     setPlans(next);
     return next;
   }, []);
+
+  const refreshCurrentPlanState = useCallback(async () => {
+    if (!selectedPlan) {
+      return;
+    }
+
+    const latestPlans = await loadPlans();
+    const refreshedPlan = latestPlans.find((item) => item.id === selectedPlan.id) ?? selectedPlan;
+    setSelectedPlan(refreshedPlan);
+
+    const nextChecklists = await loadPlanChildren(selectedPlan.id);
+    if (!selectedChecklist) {
+      return;
+    }
+
+    const refreshedChecklist = nextChecklists.find((item) => item.id === selectedChecklist.id);
+    if (!refreshedChecklist) {
+      return;
+    }
+
+    setSelectedChecklist(refreshedChecklist);
+    const nextQuestions = await loadGalleryWithRetry(() => getChecklistQuestions(refreshedChecklist.id));
+    setQuestions(nextQuestions);
+    setSavedQuestionResponses(createQuestionResponseSnapshot(nextQuestions));
+  }, [loadPlanChildren, loadPlans, selectedChecklist, selectedPlan]);
+
+  const handleLifecycleResult = useCallback(async (result: { success: boolean; errors: Array<{ message: string }> }) => {
+    if (!result.success) {
+      setError(result.errors.map((item) => item.message).join(' '));
+      return false;
+    }
+
+    setError('');
+    await refreshCurrentPlanState();
+    return true;
+  }, [refreshCurrentPlanState]);
+
+  const runPlanLifecycleAction = useCallback(async (action: () => Promise<{ success: boolean; errors: Array<{ message: string }> }>) => {
+    try {
+      setLoading(true);
+      const result = await action();
+      await handleLifecycleResult(result);
+    } finally {
+      setLoading(false);
+    }
+  }, [handleLifecycleResult]);
+
+  const promptForReason = useCallback((label: string): string | undefined => {
+    const result = window.prompt(label);
+    if (result === null) {
+      return undefined;
+    }
+
+    const trimmed = result.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, []);
+
+  const onAdvancePlanPhase = useCallback(() => {
+    if (!selectedPlanLifecycleContext) {
+      return;
+    }
+
+    void runPlanLifecycleAction(() => advanceDraftToPlan(selectedPlanLifecycleContext, lifecycleDependencies));
+  }, [lifecycleDependencies, runPlanLifecycleAction, selectedPlanLifecycleContext]);
+
+  const onApprovePlanLifecycle = useCallback(() => {
+    if (!selectedPlanLifecycleContext || !selectedPlan) {
+      return;
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_PLAN) {
+      void runPlanLifecycleAction(() => approvePlanStage(selectedPlanLifecycleContext, lifecycleDependencies));
+      return;
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_APPROVAL) {
+      void runPlanLifecycleAction(() => approveApprovalStage(selectedPlanLifecycleContext, lifecycleDependencies));
+    }
+  }, [lifecycleDependencies, runPlanLifecycleAction, selectedPlan, selectedPlanLifecycleContext]);
+
+  const onRejectPlanLifecycle = useCallback(() => {
+    if (!selectedPlanLifecycleContext || !selectedPlan) {
+      return;
+    }
+
+    const reason = promptForReason('Enter the rejection reason.');
+    if (!reason) {
+      return;
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_PLAN) {
+      void runPlanLifecycleAction(() => rejectPlanStage(selectedPlanLifecycleContext, reason, lifecycleDependencies));
+      return;
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_APPROVAL) {
+      void runPlanLifecycleAction(() => rejectApprovalStage(selectedPlanLifecycleContext, reason, lifecycleDependencies));
+    }
+  }, [lifecycleDependencies, promptForReason, runPlanLifecycleAction, selectedPlan, selectedPlanLifecycleContext]);
+
+  const onAdvanceExecutionToApproval = useCallback(() => {
+    if (!selectedPlanLifecycleContext) {
+      return;
+    }
+
+    void runPlanLifecycleAction(() => advanceExecutionToApproval(selectedPlanLifecycleContext, lifecycleDependencies));
+  }, [lifecycleDependencies, runPlanLifecycleAction, selectedPlanLifecycleContext]);
+
+  const onFinalSignOff = useCallback(() => {
+    if (!selectedPlanLifecycleContext) {
+      return;
+    }
+
+    void runPlanLifecycleAction(() => finalSignOff(selectedPlanLifecycleContext, lifecycleDependencies));
+  }, [lifecycleDependencies, runPlanLifecycleAction, selectedPlanLifecycleContext]);
+
+  const onCompleteChecklist = useCallback(() => {
+    if (!selectedPlanLifecycleContext || !selectedChecklist) {
+      return;
+    }
+
+    void runPlanLifecycleAction(() => completeChecklist(selectedPlanLifecycleContext, selectedChecklist, questions, lifecycleDependencies));
+  }, [lifecycleDependencies, questions, runPlanLifecycleAction, selectedChecklist, selectedPlanLifecycleContext]);
 
   const loadPlansWithStartupRetry = useCallback(async (): Promise<PlanVm[]> => {
     return loadGalleryWithRetry(loadPlans, (next) => next.length > 0);
@@ -1964,9 +2235,16 @@ export default function App() {
   const onCloseDeficiencyPopout = useCallback(() => {
     setIsDeficiencyOpen(false);
     setDeficiencyPopoutMode('editor');
+    setIsDeficiencyCloseDialogOpen(false);
+    setDeficiencyCloseComment('');
   }, []);
 
   const onOpenDeficiencyModal = useCallback((question?: QuestionVm, deficiency?: DeficiencyVm) => {
+    if (!deficiency && (!question || question.responseCode !== 507650001)) {
+      setError('Deficiencies can only be created from checklist questions answered No.');
+      return;
+    }
+
     setError('');
     setDeficiencyPopoutMode('editor');
     setDeficiencyQuestionId(question?.id ?? deficiency?.questionId ?? '');
@@ -1975,7 +2253,7 @@ export default function App() {
       id: deficiency?.id,
       name: deficiency?.name ?? '',
       initialCategoryCode: deficiency?.initialCategoryCode ?? 507650001,
-      acceptedCategoryCode: deficiency?.acceptedCategoryCode ?? 507650001,
+      acceptedCategoryCode: deficiency?.acceptedCategoryCode,
       statusCode: deficiency?.statusCode ?? 507650000,
       generalComment: deficiency?.generalComment ?? question?.comment ?? '',
     });
@@ -2009,6 +2287,34 @@ export default function App() {
 
     onOpenDeficiencyModal(activeDeficiencyQuestion);
   }, [activeDeficiencyQuestion, onOpenDeficiencyModal]);
+
+  const onOpenDeficiencyCloseDialog = useCallback(() => {
+    setDeficiencyCloseComment('');
+    setIsDeficiencyCloseDialogOpen(true);
+  }, []);
+
+  const onConfirmDeficiencyClose = useCallback(async () => {
+    if (!selectedPlanLifecycleContext || !activeDeficiencyRecord) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await closeDeficiency(
+        selectedPlanLifecycleContext,
+        activeDeficiencyRecord,
+        deficiencyCloseComment,
+        lifecycleDependencies,
+      );
+
+      const succeeded = await handleLifecycleResult(result);
+      if (succeeded) {
+        onCloseDeficiencyPopout();
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [activeDeficiencyRecord, deficiencyCloseComment, handleLifecycleResult, lifecycleDependencies, onCloseDeficiencyPopout, selectedPlanLifecycleContext]);
 
   const onSavePlanDetails = useCallback(async () => {
     if (!selectedPlan || !planDetailsDraft.name.trim()) {
@@ -2123,12 +2429,14 @@ export default function App() {
         }
 
         // Auto-transition Plan → Execution when first answer is saved while plan is Plan+approved
-        const latestPlanApproval = findLatestApproval(approvals, 507650001 /* Plan */, 507650000 /* PSSR_Lead */);
-        const planIsApproved = latestPlanApproval?.decisionCode === 507650000 /* Approved */;
-        if (selectedPlan.stageCode === 507650001 /* Plan */ && planIsApproved && selectedChecklist?.id) {
+        const latestPlanApproval = findLatestApproval(approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD);
+        const planIsApproved = latestPlanApproval?.decisionCode === APPROVAL_STATUS_APPROVED;
+        if (selectedPlanLifecycleContext && selectedPlan.stageCode === PLAN_STAGE_PLAN && planIsApproved && selectedChecklist) {
           try {
-            await triggerExecutionPhase(selectedPlan.id, selectedChecklist.id, selectedChecklist.statusCode);
-            await loadPlanChildren(selectedPlan.id);
+            const result = await runExecutionTransition(selectedPlanLifecycleContext, selectedChecklist, lifecycleDependencies);
+            if (result.success) {
+              await refreshCurrentPlanState();
+            }
           } catch {
             // Non-fatal: transition will be retried on next save
           }
@@ -2139,7 +2447,7 @@ export default function App() {
     } finally {
       setIsSavingQuestionResponses(false);
     }
-  }, [loadPlanChildren, questions, savedQuestionResponses, selectedChecklist, selectedPlan?.id]);
+  }, [approvals, lifecycleDependencies, questions, refreshCurrentPlanState, savedQuestionResponses, selectedChecklist, selectedPlan, selectedPlanLifecycleContext]);
 
   const onDiscardQuestionChangesAndContinue = useCallback(async () => {
     onDiscardQuestionChanges();
@@ -2157,6 +2465,13 @@ export default function App() {
 
   const onSaveDeficiency = useCallback(async () => {
     if (!selectedPlan || !deficiencyDraft.name.trim()) {
+      return;
+    }
+
+    if (!isDeficiencyDraftEditable) {
+      setError(deficiencyDraft.id
+        ? 'This deficiency is read-only in the current lifecycle phase.'
+        : 'Deficiencies can only be created from a question answered No during Execution.');
       return;
     }
 
@@ -2202,7 +2517,6 @@ export default function App() {
           questionId: deficiencyQuestionId || undefined,
           name: deficiencyDraft.name,
           initialCategoryCode: deficiencyDraft.initialCategoryCode,
-          acceptedCategoryCode: deficiencyDraft.acceptedCategoryCode,
           statusCode: deficiencyDraft.statusCode,
           generalComment: deficiencyDraft.generalComment,
         });
@@ -2219,7 +2533,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [deficiencies, deficiencyCategoryOptions, deficiencyChecklistId, deficiencyDraft, deficiencyQuestionId, deficiencyStatusOptions, onCloseDeficiencyPopout, selectedPlan]);
+  }, [deficiencies, deficiencyCategoryOptions, deficiencyChecklistId, deficiencyDraft, deficiencyQuestionId, deficiencyStatusOptions, isDeficiencyDraftEditable, onCloseDeficiencyPopout, selectedPlan]);
 
   const onCloseTeamMemberPopout = useCallback(() => {
     setIsTeamMemberOpen(false);
@@ -2227,10 +2541,105 @@ export default function App() {
   }, []);
 
   const onOpenTeamMemberPopout = useCallback(() => {
+    if (!canManageTeam) {
+      setError('Team changes are locked in the current lifecycle phase.');
+      return;
+    }
+
     setError('');
     setTeamMemberDraft(createTeamMemberDraft());
     setIsTeamMemberOpen(true);
-  }, []);
+  }, [canManageTeam]);
+
+  const planHeaderCommands = useMemo(() => {
+    if (!selectedPlan || !selectedPlanCommandState) {
+      return [];
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_DRAFT) {
+      return [{
+        key: 'advance-to-plan',
+        label: 'Advance to Plan',
+        icon: <ArrowCircleRight16Regular />,
+        appearance: 'primary' as const,
+        disabled: !selectedPlanCommandState.advanceToPlan.enabled,
+        title: selectedPlanCommandState.advanceToPlan.reasons.join(' '),
+        onClick: onAdvancePlanPhase,
+      }];
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_PLAN) {
+      return [
+        {
+          key: 'approve-plan',
+          label: 'Approve',
+          icon: <CheckmarkCircle16Regular />,
+          appearance: 'primary' as const,
+          disabled: !selectedPlanCommandState.approve.enabled,
+          title: selectedPlanCommandState.approve.reasons.join(' '),
+          onClick: onApprovePlanLifecycle,
+        },
+        {
+          key: 'reject-plan',
+          label: 'Reject',
+          icon: <Delete24Regular />,
+          appearance: 'secondary' as const,
+          disabled: !selectedPlanCommandState.reject.enabled,
+          title: selectedPlanCommandState.reject.reasons.join(' '),
+          onClick: onRejectPlanLifecycle,
+        },
+      ];
+    }
+
+    if (selectedPlan.stageCode === 507650002) {
+      return [{
+        key: 'advance-to-approval',
+        label: 'Advance to Approval',
+        icon: <ArrowCircleRight16Regular />,
+        appearance: 'primary' as const,
+        disabled: !selectedPlanCommandState.advanceToApproval.enabled,
+        title: selectedPlanCommandState.advanceToApproval.reasons.join(' '),
+        onClick: onAdvanceExecutionToApproval,
+      }];
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_APPROVAL) {
+      return [
+        {
+          key: 'approve-approval',
+          label: 'Approve',
+          icon: <CheckmarkCircle16Regular />,
+          appearance: 'primary' as const,
+          disabled: !selectedPlanCommandState.approve.enabled,
+          title: selectedPlanCommandState.approve.reasons.join(' '),
+          onClick: onApprovePlanLifecycle,
+        },
+        {
+          key: 'reject-approval',
+          label: 'Reject',
+          icon: <Delete24Regular />,
+          appearance: 'secondary' as const,
+          disabled: !selectedPlanCommandState.reject.enabled,
+          title: selectedPlanCommandState.reject.reasons.join(' '),
+          onClick: onRejectPlanLifecycle,
+        },
+      ];
+    }
+
+    if (selectedPlan.stageCode === PLAN_STAGE_COMPLETION) {
+      return [{
+        key: 'final-sign-off',
+        label: 'Final Sign Off',
+        icon: <CheckmarkCircle16Regular />,
+        appearance: 'primary' as const,
+        disabled: !selectedPlanCommandState.finalSignOff.enabled,
+        title: selectedPlanCommandState.finalSignOff.reasons.join(' '),
+        onClick: onFinalSignOff,
+      }];
+    }
+
+    return [];
+  }, [onAdvanceExecutionToApproval, onAdvancePlanPhase, onApprovePlanLifecycle, onFinalSignOff, onRejectPlanLifecycle, selectedPlan, selectedPlanCommandState]);
 
   const onSaveTeamMember = useCallback(async () => {
     if (!selectedPlan || !teamMemberDraft.memberId || teamMemberDraft.roleCode === undefined) {
@@ -2392,8 +2801,14 @@ export default function App() {
       breadcrumbs: [{ key: 'plans', label: 'Plans' }],
     };
   }, [goPlanDetails, goPlans, requestQuestionNavigation, selectedChecklist, selectedPlan, view]);
+  const selectedPlanStageLabel = selectedPlan?.stageLabel ?? 'Unknown phase';
+  const selectedPlanStageIcon = getPlanHeaderIcon(selectedPlan?.stageLabel);
   const selectedChecklistStatusLabel = selectedChecklist?.statusLabel ?? 'Unknown status';
   const selectedChecklistStatusIcon = getChecklistHeaderIcon(selectedChecklist?.statusLabel);
+
+  useEffect(() => {
+    setIsPlanSummaryExpanded(!getIsMobileBreadcrumbLayout());
+  }, [selectedPlan?.id, view]);
 
   useEffect(() => {
     setIsChecklistSummaryExpanded(!getIsMobileBreadcrumbLayout());
@@ -2515,6 +2930,20 @@ export default function App() {
                   </Fragment>
                 ))}
               </nav>
+              {view === 'plan-details' && selectedPlan && (
+                <Button
+                  appearance="subtle"
+                  className={styles.breadcrumbLifecycleButton}
+                  icon={<span className={styles.breadcrumbLifecycleIcon}>{selectedPlanStageIcon}</span>}
+                  iconPosition="before"
+                  onClick={() => setIsPlanSummaryExpanded((expanded) => !expanded)}
+                >
+                  <span className={styles.breadcrumbLifecycleLabel}>
+                    <span className={styles.breadcrumbLifecycleText}>{selectedPlanStageLabel}</span>
+                    <ChevronDown16Regular style={{ transform: isPlanSummaryExpanded ? 'rotate(180deg)' : undefined }} />
+                  </span>
+                </Button>
+              )}
               {view === 'checklist-details' && selectedChecklist && (
                 <Button
                   appearance="subtle"
@@ -2569,8 +2998,18 @@ export default function App() {
                 siteOptions={siteOptions}
                 stageOptions={stageOptions}
                 isPlanEditable={isPlanEditable}
+                isPhaseEditable={false}
                 hasPlanDetailsChanges={hasPlanDetailsChanges}
                 hasTemplateAccess={hasTemplateAccess()}
+                headerCommands={planHeaderCommands}
+                warningMessages={planWarningMessages}
+                isSummaryExpanded={isPlanSummaryExpanded}
+                canManageChecklistStructure={canManageChecklistStructure}
+                checklistActionTitle={canManageChecklistStructure ? undefined : 'Checklist structure is locked in the current lifecycle phase.'}
+                canCreateDeficiency={false}
+                deficiencyActionTitle="Deficiencies must be created from a checklist question answered No during Execution."
+                canManageTeam={canManageTeam}
+                teamActionTitle={canManageTeam ? undefined : 'Team changes are locked in the current lifecycle phase.'}
                 onPlanDetailsChange={(changes) => {
                   setPlanDetailsDraft((current) => ({ ...current, ...changes }));
                 }}
@@ -2605,6 +3044,14 @@ export default function App() {
                 hasPendingChanges={hasPendingQuestionChanges}
                 pendingResponseCount={pendingQuestionResponseCount}
                 isSavingResponses={isSavingQuestionResponses}
+                isQuestionAnsweringEnabled={isQuestionEditingEnabled}
+                questionAnsweringTitle={questionAnsweringTitle}
+                warningMessages={checklistCompleteReasons}
+                canCreateDeficiency={canCreateDeficiencyForActiveQuestion}
+                deficiencyActionTitle={canCreateDeficiencyForActiveQuestion ? undefined : 'Deficiencies can only be created from a question answered No during Execution.'}
+                canCompleteChecklist={canCompleteCurrentChecklist}
+                completeChecklistTitle={checklistCompleteTitle}
+                onCompleteChecklist={onCompleteChecklist}
                 onQuestionAnswer={onQuestionAnswer}
                 onSaveResponses={() => { void onSaveQuestionResponses(); }}
                 onQuestionCommentChange={(questionId, comment) => {
@@ -2765,6 +3212,7 @@ export default function App() {
                       <Input
                         value={deficiencyDraft.name}
                         onChange={(_, data) => setDeficiencyDraft((current) => ({ ...current, name: data.value }))}
+                        disabled={!isDeficiencyDraftEditable}
                       />
                     </Field>
 
@@ -2780,6 +3228,7 @@ export default function App() {
                               setDeficiencyDraft((current) => ({ ...current, initialCategoryCode: Number(data.optionValue) }));
                             }
                           }}
+                          disabled={!isDeficiencyDraftEditable}
                         >
                           {deficiencyCategoryOptions.map((option) => (
                             <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
@@ -2798,7 +3247,7 @@ export default function App() {
                               setDeficiencyDraft((current) => ({ ...current, acceptedCategoryCode: Number(data.optionValue) }));
                             }
                           }}
-                          disabled={!isAcceptedCategoryEnabled}
+                          disabled={!isDeficiencyDraftEditable || !isAcceptedCategoryEnabled}
                         >
                           {deficiencyCategoryOptions.map((option) => (
                             <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
@@ -2825,8 +3274,9 @@ export default function App() {
                             }));
                           }
                         }}
+                        disabled={!isDeficiencyDraftEditable}
                       >
-                        {deficiencyStatusOptions.map((option) => (
+                        {deficiencyStatusOptions.filter((option) => option.key !== 507650002).map((option) => (
                           <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
                         ))}
                       </Combobox>
@@ -2840,6 +3290,7 @@ export default function App() {
                       <Textarea
                         value={deficiencyDraft.generalComment ?? ''}
                         onChange={(_, data) => setDeficiencyDraft((current) => ({ ...current, generalComment: data.value }))}
+                        disabled={!isDeficiencyDraftEditable}
                       />
                     </Field>
                   </div>
@@ -2853,6 +3304,9 @@ export default function App() {
                     {deficiencyQuestionId && (
                       <ResponsiveButton appearance="secondary" icon={<Add24Regular />} label="Add Another Deficiency" onClick={onAddAnotherQuestionDeficiency} />
                     )}
+                    {deficiencyDraft.id && activeDeficiencyRecord?.statusCode !== 507650002 && (
+                      <ResponsiveButton appearance="secondary" icon={<CheckmarkCircle16Regular />} label="Close" disabled={!isActiveDeficiencyEditable} title={isActiveDeficiencyEditable ? undefined : 'This deficiency is read-only in the current lifecycle phase.'} onClick={onOpenDeficiencyCloseDialog} />
+                    )}
                     <ResponsiveButton appearance="primary" icon={<Save24Regular />} label={t('save')} disabled={!canSaveDeficiency} onClick={() => { void onSaveDeficiency(); }} />
                   </div>
                 </>
@@ -2860,6 +3314,30 @@ export default function App() {
             </div>
           </Card>
         </div>
+      )}
+
+      {isDeficiencyCloseDialogOpen && (
+        <Dialog open onOpenChange={(_, data) => {
+          if (!data.open) {
+            setIsDeficiencyCloseDialogOpen(false);
+          }
+        }}>
+          <DialogSurface>
+            <DialogBody>
+              <DialogContent>
+                <Field label="Closing Comment" required>
+                  <Textarea value={deficiencyCloseComment} onChange={(_, data) => setDeficiencyCloseComment(data.value)} />
+                </Field>
+              </DialogContent>
+              <div className={styles.unsavedResponsesActions}>
+                <Button appearance="secondary" onClick={() => setIsDeficiencyCloseDialogOpen(false)}>Cancel</Button>
+                <Button appearance="primary" disabled={!deficiencyCloseComment.trim()} onClick={() => { void onConfirmDeficiencyClose(); }}>
+                  Confirm Close
+                </Button>
+              </div>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
       )}
 
       {isTeamMemberOpen && (
@@ -3125,9 +3603,9 @@ export default function App() {
               </div>
             </DialogContent>
             <Divider />
-            <DialogActions>
+            <div className={styles.unsavedResponsesActions}>
               <ResponsiveButton appearance="primary" icon={<Save24Regular />} label="OK" onClick={() => { void onCreatePlan(); }} />
-            </DialogActions>
+            </div>
           </DialogBody>
         </DialogSurface>
       </Dialog>

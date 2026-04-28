@@ -1,7 +1,8 @@
-import { Badge, Button, Caption1, Dropdown, Field, Input, Option, ProgressBar, Tab, TabList, Tooltip, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
-import { Add24Regular, ArrowClockwise24Regular, Checkmark24Regular, ClipboardTask24Regular, Info24Regular, MoreHorizontal24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Badge, Button, Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
+import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, MoreHorizontal24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
+import { Fragment, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { formatDate, truncate } from '../app/format';
+import { isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
 import { getApprovalDecisionTone, getChecklistStatusTone, getDeficiencyStatusTone, getPlanPhaseTone } from '../app/semanticColors';
 import type { ApprovalVm, ChecklistVm, DeficiencyVm, PlanDetailsDraftVm, PlanVm, TeamMemberVm } from '../app/types';
 import { DataState, GalleryListItem, ResponsiveButton, RowCard, SectionPanel, StatusChip, VirtualizedList } from '../components/ui';
@@ -18,6 +19,14 @@ const MOBILE_APPROVAL_ROW_HEIGHT = 132;
 const DESKTOP_TEAM_ROW_HEIGHT = 98;
 const MOBILE_TEAM_ROW_HEIGHT = 82;
 
+const PLAN_LIFECYCLE_STAGES = [
+  { code: PLAN_STAGE_DRAFT, label: 'Draft', icon: <Info24Regular /> },
+  { code: PLAN_STAGE_PLAN, label: 'Plan', icon: <ClipboardTask24Regular /> },
+  { code: PLAN_STAGE_EXECUTION, label: 'Execution', icon: <Wrench24Regular /> },
+  { code: PLAN_STAGE_APPROVAL, label: 'Approval', icon: <Tag16Regular /> },
+  { code: PLAN_STAGE_COMPLETION, label: 'Completion', icon: <CheckmarkCircle16Regular /> },
+] as const;
+
 function getIsMobileTabLayout(): boolean {
   return typeof window !== 'undefined' && window.matchMedia(MOBILE_TAB_QUERY).matches;
 }
@@ -29,6 +38,142 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalL,
     height: '100%',
     minHeight: 0,
+    minWidth: 0,
+    overflowX: 'hidden',
+  },
+  summarySection: {
+    flexShrink: 0,
+  },
+  summaryCard: {
+    display: 'grid',
+    gap: tokens.spacingVerticalM,
+    justifyItems: 'center',
+  },
+  lifecycleRail: {
+    width: '100%',
+    paddingLeft: tokens.spacingHorizontalL,
+    paddingRight: tokens.spacingHorizontalL,
+    boxSizing: 'border-box',
+    '@media (max-width: 700px)': {
+      paddingLeft: tokens.spacingHorizontalM,
+      paddingRight: tokens.spacingHorizontalM,
+    },
+  },
+  lifecycleStepper: {
+    display: 'grid',
+    gridTemplateColumns: '42px minmax(12px, 1fr) 42px minmax(12px, 1fr) 42px minmax(12px, 1fr) 42px minmax(12px, 1fr) 42px',
+    alignItems: 'center',
+    width: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    '@media (max-width: 700px)': {
+      gridTemplateColumns: '34px minmax(4px, 1fr) 34px minmax(4px, 1fr) 34px minmax(4px, 1fr) 34px minmax(4px, 1fr) 34px',
+    },
+  },
+  lifecycleNodeCell: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lifecycleStepCircle: {
+    width: '42px',
+    height: '42px',
+    borderRadius: tokens.borderRadiusCircular,
+    display: 'grid',
+    placeItems: 'center',
+    border: `2px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    color: tokens.colorNeutralForeground3,
+    boxSizing: 'border-box',
+    '@media (max-width: 700px)': {
+      width: '34px',
+      height: '34px',
+    },
+  },
+  lifecycleStepCircleCompleted: {
+    backgroundColor: tokens.colorPaletteGreenBackground2,
+    border: `2px solid ${tokens.colorPaletteGreenBorderActive}`,
+    color: tokens.colorPaletteGreenForeground2,
+  },
+  lifecycleStepCircleActive: {
+    backgroundColor: tokens.colorBrandBackground2,
+    border: `2px solid ${tokens.colorBrandForeground1}`,
+    color: tokens.colorBrandForeground1,
+    boxShadow: `0 0 0 4px ${tokens.colorBrandBackgroundInvertedHover}`,
+  },
+  lifecycleLabels: {
+    display: 'grid',
+    gridTemplateColumns: '42px minmax(12px, 1fr) 42px minmax(12px, 1fr) 42px minmax(12px, 1fr) 42px minmax(12px, 1fr) 42px',
+    alignItems: 'start',
+    width: '100%',
+    marginTop: tokens.spacingVerticalXS,
+    '@media (max-width: 700px)': {
+      gridTemplateColumns: '34px minmax(4px, 1fr) 34px minmax(4px, 1fr) 34px minmax(4px, 1fr) 34px minmax(4px, 1fr) 34px',
+      marginTop: tokens.spacingVerticalXXS,
+    },
+  },
+  lifecycleLabelCell: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    minWidth: 0,
+    gridRow: '1',
+  },
+  lifecycleStepLabel: {
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground3,
+    textAlign: 'center',
+    width: '100%',
+    whiteSpace: 'nowrap',
+    wordBreak: 'normal',
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: tokens.lineHeightBase200,
+    '@media (max-width: 700px)': {
+      fontSize: tokens.fontSizeBase100,
+      lineHeight: tokens.lineHeightBase100,
+    },
+  },
+  lifecycleStepLabelActive: {
+    color: tokens.colorNeutralForeground1,
+  },
+  lifecycleStepLabelCompleted: {
+    color: tokens.colorNeutralForeground2,
+  },
+  lifecycleConnector: {
+    height: '2px',
+    width: '100%',
+    backgroundColor: tokens.colorNeutralStroke2,
+    justifySelf: 'stretch',
+  },
+  lifecycleConnectorCompleted: {
+    backgroundColor: tokens.colorPaletteGreenBorderActive,
+  },
+  summaryMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalS,
+    flexWrap: 'nowrap',
+    width: '100%',
+    minWidth: 0,
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingHorizontalXS,
+    },
+  },
+  summaryProgress: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    flex: '1 1 auto',
+    minWidth: 0,
+    maxWidth: 'none',
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingHorizontalXS,
+    },
+  },
+  summaryProgressBar: {
+    flex: '1 1 auto',
+    minWidth: 0,
   },
   controlsRow: {
     display: 'flex',
@@ -57,6 +202,8 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     gap: tokens.spacingHorizontalM,
     '@media (max-width: 700px)': {
+      flexWrap: 'wrap',
+      alignItems: 'stretch',
       gap: tokens.spacingHorizontalXS,
     },
   },
@@ -64,9 +211,12 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
-    flexShrink: 0,
+    flexShrink: 1,
     position: 'relative',
     '@media (max-width: 700px)': {
+      width: '100%',
+      justifyContent: 'flex-end',
+      flexWrap: 'wrap',
       gap: tokens.spacingHorizontalXXS,
     },
   },
@@ -144,8 +294,26 @@ export interface PlanDetailsScreenProps {
   siteOptions: Array<{ key: number; label: string }>;
   stageOptions: Array<{ key: number; label: string }>;
   isPlanEditable: boolean;
+  isPhaseEditable: boolean;
   hasPlanDetailsChanges: boolean;
   hasTemplateAccess: boolean;
+  headerCommands: Array<{
+    key: string;
+    label: string;
+    icon: ReactElement;
+    appearance?: ButtonProps['appearance'];
+    disabled?: boolean;
+    title?: string;
+    onClick: () => void;
+  }>;
+  warningMessages: string[];
+  isSummaryExpanded: boolean;
+  canManageChecklistStructure: boolean;
+  checklistActionTitle?: string;
+  canCreateDeficiency: boolean;
+  deficiencyActionTitle?: string;
+  canManageTeam: boolean;
+  teamActionTitle?: string;
   onPlanDetailsChange: (changes: Partial<PlanDetailsDraftVm>) => void;
   onResetPlanDetails: () => void;
   onSavePlanDetails: () => void;
@@ -163,6 +331,10 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
   const styles = useStyles();
   const [isMobileTabLayout, setIsMobileTabLayout] = useState<boolean>(getIsMobileTabLayout);
   const [isMobileOverflowOpen, setIsMobileOverflowOpen] = useState<boolean>(false);
+  const progressValue = Math.max(0, Math.min(1, props.selectedPlan.percentComplete / 100));
+  const currentStageIndex = PLAN_LIFECYCLE_STAGES.findIndex((stage) => stage.code === props.selectedPlan.stageCode);
+  const normalizedCurrentStageIndex = currentStageIndex >= 0 ? currentStageIndex : 0;
+  const isCompletionFinalized = isPlanFinalized(props.approvals);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_TAB_QUERY);
@@ -215,6 +387,96 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
   const teamRowHeight = isMobileTabLayout ? MOBILE_TEAM_ROW_HEIGHT : DESKTOP_TEAM_ROW_HEIGHT;
   return (
     <div className={styles.screenPanel}>
+      {props.isSummaryExpanded && (
+        <SectionPanel className={styles.summarySection}>
+          <div className={styles.summaryCard}>
+            <div className={styles.lifecycleRail}>
+              <div className={styles.lifecycleStepper}>
+                {PLAN_LIFECYCLE_STAGES.map((stage, index) => {
+                  const isCompleted = isCompletionFinalized
+                    ? index <= normalizedCurrentStageIndex
+                    : index < normalizedCurrentStageIndex;
+                  const isActive = isCompletionFinalized
+                    ? false
+                    : index === normalizedCurrentStageIndex;
+                  const connectorCompleted = isCompletionFinalized
+                    ? index < normalizedCurrentStageIndex
+                    : index < normalizedCurrentStageIndex;
+
+                  return (
+                    <Fragment key={stage.code}>
+                      <div className={styles.lifecycleNodeCell}>
+                        <div
+                          className={mergeClasses(
+                            styles.lifecycleStepCircle,
+                            isCompleted && styles.lifecycleStepCircleCompleted,
+                            isActive && styles.lifecycleStepCircleActive,
+                          )}
+                          aria-current={isActive ? 'step' : undefined}
+                        >
+                          {isCompleted ? <Checkmark12Regular /> : stage.icon}
+                        </div>
+                      </div>
+                      {index < PLAN_LIFECYCLE_STAGES.length - 1 && (
+                        <div
+                          className={mergeClasses(
+                            styles.lifecycleConnector,
+                            connectorCompleted && styles.lifecycleConnectorCompleted,
+                          )}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </div>
+
+              <div className={styles.lifecycleLabels}>
+                {PLAN_LIFECYCLE_STAGES.map((stage, index) => {
+                  const isCompleted = isCompletionFinalized
+                    ? index <= normalizedCurrentStageIndex
+                    : index < normalizedCurrentStageIndex;
+                  const isActive = isCompletionFinalized
+                    ? false
+                    : index === normalizedCurrentStageIndex;
+
+                  return (
+                    <div
+                      key={stage.code}
+                      className={styles.lifecycleLabelCell}
+                      style={{
+                        gridColumn: `${(index * 2) + 1} / ${(index * 2) + 2}`,
+                      }}
+                    >
+                      <Text
+                        className={mergeClasses(
+                          styles.lifecycleStepLabel,
+                          isCompleted && styles.lifecycleStepLabelCompleted,
+                          isActive && styles.lifecycleStepLabelActive,
+                        )}
+                      >
+                        {stage.label}
+                      </Text>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className={styles.summaryMeta}>
+              <StatusChip
+                value={`${props.selectedPlan.checklistCompletedCount}/${props.selectedPlan.checklistTotalCount} ${props.selectedPlan.checklistTotalCount === 1 ? 'Checklist' : 'Checklists'}`}
+                color="brand"
+              />
+              <div className={styles.summaryProgress}>
+                <ProgressBar value={progressValue} thickness="medium" className={styles.summaryProgressBar} />
+                <Text>{Math.round(progressValue * 100)}%</Text>
+              </div>
+            </div>
+          </div>
+        </SectionPanel>
+      )}
+
       <div className={styles.tabsRow}>
         <TabList
           className={styles.pageTabs}
@@ -230,6 +492,17 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
         </TabList>
 
         <div className={styles.tabActions}>
+          {props.headerCommands.map((command) => (
+            <ResponsiveButton
+              key={command.key}
+              appearance={command.appearance ?? 'secondary'}
+              icon={command.icon}
+              label={command.label}
+              disabled={command.disabled}
+              title={command.title}
+              onClick={command.onClick}
+            />
+          ))}
           {overflowTabs.length > 0 && (
             <>
               <Button
@@ -263,6 +536,13 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
           <ResponsiveButton appearance="subtle" icon={<ArrowClockwise24Regular />} label="Refresh Plan" onClick={props.onRefreshPlan} />
         </div>
       </div>
+
+      {props.warningMessages.length > 0 && (
+        <MessageBar intent="warning">
+          <strong>Lifecycle conditions not met</strong>
+          <div>{props.warningMessages.join(' ')}</div>
+        </MessageBar>
+      )}
 
       {props.planTab === 'details' && (
         <SectionPanel
@@ -334,7 +614,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                       props.onPlanDetailsChange({ stageCode: Number(data.optionValue) });
                     }
                   }}
-                  disabled={!props.isPlanEditable}
+                  disabled={!props.isPhaseEditable}
                 >
                   {props.stageOptions.map((option) => (
                     <Option key={option.key} value={String(option.key)}>{option.label}</Option>
@@ -367,7 +647,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
           title="Plan Checklists"
           className={styles.listPanel}
           action={(
-            <ResponsiveButton icon={<Add24Regular />} label="Add Checklist" disabled={!props.hasTemplateAccess} onClick={props.onOpenChecklistTemplatePicker} />
+            <ResponsiveButton icon={<Add24Regular />} label="Add Checklist" disabled={!props.hasTemplateAccess || !props.canManageChecklistStructure} title={props.checklistActionTitle} onClick={props.onOpenChecklistTemplatePicker} />
           )}
         >
           <DataState
@@ -425,7 +705,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
         <SectionPanel
           title="Deficiencies"
           className={styles.listPanel}
-          action={<ResponsiveButton icon={<Add24Regular />} label="New Deficiency" onClick={props.onOpenNewDeficiency} />}
+          action={<ResponsiveButton icon={<Add24Regular />} label="New Deficiency" disabled={!props.canCreateDeficiency} title={props.deficiencyActionTitle} onClick={props.onOpenNewDeficiency} />}
         >
           <DataState
             loading={props.loading}
@@ -514,7 +794,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
         <SectionPanel
           title="Team"
           className={styles.listPanel}
-          action={<ResponsiveButton icon={<Add24Regular />} label="Add Team Member" onClick={props.onOpenAddTeamMember} />}
+          action={<ResponsiveButton icon={<Add24Regular />} label="Add Team Member" disabled={!props.canManageTeam} title={props.teamActionTitle} onClick={props.onOpenAddTeamMember} />}
         >
           <DataState
             loading={props.loading}

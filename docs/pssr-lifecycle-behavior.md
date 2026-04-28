@@ -1,304 +1,167 @@
-# PSSR Lifecycle — Button Behavior & Locking Reference
+# PSSR Lifecycle Behavior
 
-This document describes exactly which buttons appear, when they are enabled,
-what conditions they check, and what locking rules apply at each phase.
+This document describes the lifecycle commands rendered in the current app, the guard conditions behind each command, and the lock matrix enforced by the app in this repo.
 
----
+## Current implementation scope
 
-## 1. Plan Phase State Machine
+- The React app now renders the missing lifecycle command buttons in the existing header/action areas only.
+- Lifecycle mutations are centralized in the client transition layer under `src/app/lifecycleTransitions.ts`.
+- The app connects directly to Dataverse through the PAC Power Apps runtime used by this workspace.
+- The lifecycle process is enforced by the app through those transition guards and UI locks.
 
-```
-Draft ──[Advance to Plan]──► Plan ──[Approve]──► Plan(approved) ──[first Q answer]──► Execution
-  ▲                             │ [Reject]                                                │
-  │                             └──────────────────────────────────► Draft ◄─────────────┘
-  │                                                                                 [Reject]
-  │                                                             Approval ◄──[Advance to Approval]
-  │                                                               │ [Approve]
-  │                                                               └──► Completed ──[Final Sign Off]──► LOCKED
-  │                                                               │ [Reject]
-  └───────────────────────────────────────────── Execution ◄──────┘
-```
+## Plan Details header commands
 
-### Phase numeric codes (crc07_pssrstage)
-- **Draft** = 507650000
-- **Plan** = 507650001
-- **Execution** = 507650002
-- **Approval** = 507650003
-- **Completion** = 507650004
+Buttons appear only in the existing Plan Details header action row.
 
----
+### Draft
 
-## 2. Plan Details Screen — Phase Action Buttons
+- `Advance to Plan`
+- Enabled only when:
+  - the current user is the plan originator (`Created By`)
+  - the plan has at least one checklist
+  - the team includes a `PSSR_Lead`
+  - the team includes a `PU_Lead`
 
-All lifecycle buttons appear in the **existing tab-actions area** of
-`PlanDetailsScreen`. Buttons not relevant to the current phase/role are hidden.
+### Plan
 
----
+- `Approve`
+- `Reject`
+- Enabled only when:
+  - the current user is the `PSSR_Lead` team member
+  - the latest `Plan / PSSR_Lead` approval record is still in progress
 
-### Button: "Advance to Plan"
+### Execution
 
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Draft` |
-| Enabled when | All guard conditions pass |
-| Who can click | Any user (Originator / plan creator) |
+- `Advance to Approval`
+- Enabled only when:
+  - the current user is the `PSSR_Lead` team member
+  - every checklist is `Completed`
+  - every deficiency has an accepted category
+  - every category `A` deficiency is `Closed`
 
-**Guard conditions (all must pass):**
-1. Plan has ≥ 1 checklist
-2. Team includes a member with role = PSSR_Lead
-3. Team includes a member with role = PU_Lead
+### Approval
 
-**On click:**
-1. Set `Plan.Phase = Plan` (507650001)
-2. Create Approval: Phase=Draft, Role=PSSR_Lead, Status=Completed (507650002)
-3. Create Approval: Phase=Plan, Role=PSSR_Lead, Status=null (In Progress)
+- `Approve`
+- `Reject`
+- Enabled only when:
+  - the current user is the `PU_Lead` team member
+  - the latest `Approval / PU_Lead` approval record is still in progress
 
-**If disabled:** Show warning listing each unmet condition.
+### Completion
 
----
+- `Final Sign Off`
+- Enabled only when:
+  - the current user is the `PSSR_Lead` team member
+  - every deficiency is `Closed`
+  - the latest `Completion / PSSR_Lead` approval record is still in progress
 
-### Button: "Approve" (Plan stage)
+## Checklist Details header commands
 
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Plan` |
-| Enabled when | Current user's plan role = PSSR_Lead AND latest Plan/PSSR_Lead approval is In Progress |
-| Who can click | Team member with role PSSR_Lead |
+The existing Checklist Details header action row now includes:
 
-**On click:**
-1. Update latest Approval (Phase=Plan, Role=PSSR_Lead) → Status=Approved (507650000)
-2. Plan phase stays at Plan (auto-advances to Execution on first question answer)
+- `Complete`
 
----
+Enabled only when:
 
-### Button: "Reject" (Plan stage)
+- the checklist is not already `Completed`
+- question answering is still enabled for the current plan/checklist state
+- every question on the checklist has a response
+- every question answered `No` has at least one linked deficiency
 
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Plan` |
-| Enabled when | Same as Approve |
-| Who can click | Team member with role PSSR_Lead |
+## Deficiency editor commands
 
-**On click:**
-1. Update latest Approval (Phase=Plan, Role=PSSR_Lead) → Status=Rejected (507650001)
-2. Set `Plan.Phase = Draft` (507650000)
+The existing floating deficiency editor now includes:
 
----
+- `Close`
 
-### Button: "Advance to Approval"
+Behavior:
 
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Execution` |
-| Enabled when | All guard conditions pass AND current user's plan role = PSSR_Lead |
-| Who can click | Team member with role PSSR_Lead |
+- shown only when editing an existing deficiency that is not already closed
+- disabled when the current phase makes the deficiency read-only
+- opens a confirmation dialog that requires a closing comment
+- on confirm, writes:
+  - `crc07_status = Closed`
+  - `crc07_closeoutcomment`
+  - `crc07_closedon`
+  - `crc07_Closed_By@odata.bind`
 
-**Guard conditions (all must pass):**
-1. All checklists have `Status = Completed` (507650002)
-2. No deficiency has `AcceptedCategory` = null/blank
-3. No deficiency with `AcceptedCategory = A` (507650000) has `Status ≠ Closed`
+## Automatic transition
 
-**On click:**
-1. Set `Plan.Phase = Approval` (507650003)
-2. Create Approval: Phase=Execution, Role=PSSR_Lead, Status=Completed (507650002)
-3. Create Approval: Phase=Approval, Role=PU_Lead, Status=null (In Progress)
+The app auto-transitions `Plan -> Execution` after the first successful question response save only when:
 
----
+- the plan is currently in `Plan`
+- the latest `Plan / PSSR_Lead` approval is `Approved`
 
-### Button: "Approve" (Approval stage)
+On transition:
 
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Approval` |
-| Enabled when | Current user's plan role = PU_Lead AND latest Approval/PU_Lead approval is In Progress |
-| Who can click | Team member with role PU_Lead |
+- plan phase becomes `Execution`
+- the affected checklist becomes `In Progress` when it was previously `Not Started`
 
-**On click:**
-1. Update latest Approval (Phase=Approval, Role=PU_Lead) → Status=Approved (507650000)
-2. Set `Plan.Phase = Completion` (507650004)
-3. Create Approval: Phase=Completion, Role=PSSR_Lead, Status=null (In Progress)
+## Lock matrix
 
----
+### Plan metadata
 
-### Button: "Reject" (Approval stage)
+- Draft: editable
+- Plan before approval: editable
+- Plan after approval: locked
+- Execution: locked
+- Approval: locked
+- Completion pending final sign off: locked
+- Completion finalized: locked
 
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Approval` |
-| Enabled when | Same as Approve (Approval stage) |
-| Who can click | Team member with role PU_Lead |
-
-**On click:**
-1. Update latest Approval (Phase=Approval, Role=PU_Lead) → Status=Rejected (507650001)
-2. Set `Plan.Phase = Execution` (507650002)
-3. Create Approval: Phase=Execution, Role=PSSR_Lead, Status=null (In Progress)
-
----
-
-### Button: "Final Sign Off"
-
-| Property | Value |
-|---|---|
-| Visible when | `plan.phase === Completion` AND NOT fully locked |
-| Enabled when | Current user's plan role = PSSR_Lead AND all deficiencies Closed |
-| Who can click | Team member with role PSSR_Lead |
-
-**After Final Sign Off: plan is permanently locked. No reopen/override path.**
-
-**On click:**
-1. Update latest Approval (Phase=Completion, Role=PSSR_Lead) → Status=Completed (507650002)
-2. Plan enters fully-locked state
-
----
-
-## 3. Automatic Transition: Plan (Approved) → Execution
-
-This transition is triggered **automatically by the client** when the first
-question answer is successfully saved while `plan.phase === Plan` and the
-latest Plan/PSSR_Lead approval has `Status = Approved`.
-
-**Steps triggered after successful question-response save:**
-1. Set `Plan.Phase = Execution` (507650002)
-2. Set `Checklist.Status = InProgress` (507650001) for the checklist that
-   received the answer — but only if the checklist was `NotStarted` (507650000)
-
----
-
-## 4. Checklist Details Screen — "Complete" Button
-
-| Property | Value |
-|---|---|
-| Visible when | Checklist is NOT yet Completed |
-| Enabled when | All guard conditions pass |
-| Location | Existing tab-actions area of ChecklistDetailsScreen |
-
-**Guard conditions (all must pass):**
-1. All questions on the checklist have a response (Yes/No/NA)
-2. Every question answered "No" has at least 1 linked Deficiency
-
-**On click:**
-1. Set `Checklist.Status = Completed` (507650002)
-2. All question answers on this checklist become read-only
-
----
-
-## 5. Deficiency Editor — "Close" Button
-
-| Property | Value |
-|---|---|
-| Visible when | Deficiency `Status ≠ Closed` |
-| Enabled when | `closingComment` field is not empty (in the confirmation dialog) |
-| Location | Action row of the floating deficiency editor |
-
-**On click:** Opens a confirmation dialog that requires a **Closing Comment**.
-
-**On confirm:**
-1. Set `Deficiency.Status = Closed` (507650002)
-2. Set `Deficiency.ClosedOn = now()`
-3. Set `Deficiency.ClosedBy = current user system ID`
-4. Set `Deficiency.CloseoutComment = entered closing comment`
-5. Lock deficiency record entirely (no further edits)
-
----
-
-## 6. Phase / Status Locking Matrix
-
-### Plan metadata (name, event, site, system)
-| Phase | Editable? |
-|---|---|
-| Draft | ✅ Yes |
-| Plan (pending) | ❌ No |
-| Plan (approved) | ❌ No |
-| Execution | ❌ No |
-| Approval | ❌ No |
-| Completion (pending) | ❌ No |
-| Completion (finalized) | ❌ No |
-
-### Checklist structure (add / remove checklists)
-| Phase | Editable? |
-|---|---|
-| Draft | ✅ Yes |
-| Plan (pending) | ✅ Yes |
-| Plan (approved) | ❌ No |
-| Execution | ❌ No |
-| Approval | ❌ No |
-| Completion (pending) | ❌ No |
-| Completion (finalized) | ❌ No |
-
-### Question answering (Yes/No/NA)
-| Phase | Enabled? |
-|---|---|
-| Draft | ❌ No |
-| Plan (pending) | ❌ No |
-| Plan (approved) | ✅ Yes |
-| Execution | ✅ Yes |
-| Approval | ❌ No |
-| Completion (pending) | ❌ No |
-| Completion (finalized) | ❌ No |
-
-> When the checklist status is `Completed`, question answers are also read-only.
-
-### Deficiency creation (new deficiency)
-| Phase | Allowed? |
-|---|---|
-| Draft | ❌ No |
-| Plan (pending/approved) | ❌ No |
-| Execution | ✅ Yes (only for questions answered "No") |
-| Approval | ❌ No |
-| Completion (pending) | ❌ No |
-| Completion (finalized) | ❌ No |
-
-### Deficiency editing (update status, category, comments)
-| Phase | Allowed? |
-|---|---|
-| Draft | ❌ No |
-| Plan (pending/approved) | ❌ No |
-| Execution | ✅ Yes |
-| Approval | ✅ Yes (existing deficiencies only) |
-| Completion (pending) | ✅ Yes (existing deficiencies only) |
-| Completion (finalized) | ❌ No |
-
-> Once `Deficiency.Status = Closed`, the record is fully locked regardless of plan phase.
-
-### Team member management
-| Phase | Allowed? |
-|---|---|
-| Draft | ✅ Yes |
-| Plan (pending/approved) | ✅ Yes |
-| Execution | ✅ Yes |
-| Approval | ❌ No |
-| Completion (pending) | ❌ No |
-| Completion (finalized) | ❌ No |
-
----
-
-## 7. Warning / Error Display
-
-- If a lifecycle button is **disabled** due to unmet guard conditions, a tooltip
-  and/or warning banner lists each unmet condition.
-- If an API call **fails**, the error message is displayed in the existing
-  warning banner (the `error` state in App.tsx).
-- On **concurrency conflict** (Dataverse returns HTTP 412): display a message
-  asking the user to refresh and retry.
-
----
-
-## 8. Idempotency Rules
-
-| Action | Guard prevents re-execution |
-|---|---|
-| Advance to Plan | Blocked if `plan.phase !== Draft` |
-| Approve Plan | Blocked if latest Plan/PSSR_Lead approval status is not null |
-| Advance to Approval | Blocked if `plan.phase !== Execution` |
-| Approve Approval | Blocked if latest Approval/PU_Lead approval status is not null |
-| Final Sign Off | Blocked if plan is already fully locked |
-| Complete Checklist | Blocked if checklist already Completed |
-| Close Deficiency | Blocked if deficiency already Closed |
-
----
-
-## 9. Concurrency Safety
-
-All Dataverse write calls go through `withMutationRetry` (max 3 attempts with
-exponential back-off). On unrecoverable conflict the UI displays the error and
-prompts the user to refresh and retry manually.
+Manual phase editing through the phase dropdown is disabled. Phase changes are command-driven only.
+
+### Checklist structure
+
+- Draft: editable
+- Plan before approval: editable
+- Plan after approval: locked
+- Execution: locked
+- Approval: locked
+- Completion pending final sign off: locked
+- Completion finalized: locked
+
+### Team management
+
+- Draft: editable
+- Plan: editable
+- Execution: editable
+- Approval: locked
+- Completion pending final sign off: locked
+- Completion finalized: locked
+
+### Question answering
+
+- Draft: locked
+- Plan before approval: locked
+- Plan after approval: enabled
+- Execution: enabled
+- Approval: locked
+- Completion pending final sign off: locked
+- Completion finalized: locked
+
+Checklist completion also locks question answering for that checklist.
+
+### Deficiency creation
+
+- only allowed from a checklist question answered `No`
+- only allowed while the plan is in `Execution`
+- disabled everywhere else
+
+Because the rule is question-scoped, the existing plan-level `New Deficiency` entry point is disabled and directs users back to the question-level deficiency flow.
+
+### Deficiency editing
+
+- Execution: editable
+- Approval: editable for existing deficiencies only
+- Completion pending final sign off: editable for existing deficiencies only
+- Completion finalized: locked
+- Closed deficiency: always locked
+
+Accepted category stays disabled until the deficiency status is `In Progress`.
+
+## Warnings and failures
+
+- Disabled lifecycle commands surface the unmet conditions through button hover text and an in-screen warning bar.
+- Transition failures surface through the app error path.
+- The transition layer returns structured `{ success, errors, warnings, updatedIds }` results so UI messages can remain specific.
