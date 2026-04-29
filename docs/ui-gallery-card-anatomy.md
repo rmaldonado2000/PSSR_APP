@@ -23,7 +23,7 @@ All gallery cards use the same base anatomy:
 - Pills stay in the header row.
 - Status pills use `kind="status"` and never render icons.
 - Phase pills use `kind="phase"` and keep their existing icons.
-- Team role pills use `kind="neutral"`.
+- Team role, PSSR Type, Discipline, location pills use `kind="neutral"` and keep their existing icons.
 - The pill stack wraps when more than two pills are present while staying right-aligned.
 
 ## Gallery Rules
@@ -32,7 +32,7 @@ All gallery cards use the same base anatomy:
 
 - Server-side ordering: `createdon desc`
 - Title: `{PlanId} - {PlanName}`
-- Pills: existing phase and neutral pills remain in the header stack
+- Pills: PSSR Phase, PSSR Type, Location
 - Progress row: checklist completion bar and count
 - Metadata order:
   - Event
@@ -41,16 +41,17 @@ All gallery cards use the same base anatomy:
 
 ### Checklist Child Gallery
 
+- Server-side ordering: `ChecklistID asc'
 - Title: `{ChecklistId} - {ChecklistName}`
-- Autonumber is part of the title, not a separate metadata row
-- Pills: status plus existing checklist context pill(s)
+- Pills: Status, Discipline
 - Progress row: question completion bar and count
 - Footer: Created On
 
 ### Deficiency Child Gallery
 
+- Server-side ordering: `modifiedon' desc
 - Title: `{DeficiencyId} - {DeficiencyName}`
-- Pills: status only
+- Pills: Status
 - Metadata order:
   - Initial Cat
   - Accepted Cat
@@ -62,20 +63,19 @@ All gallery cards use the same base anatomy:
 
 ### Approvals Child Gallery
 
-- Title: approver member name
-- Pills:
-  - Phase
-  - Status
+- Server-side ordering: Member Name
+- Title: Member name
+- Pills: Phase, Status
 - Metadata order:
   - Role
   - Approved
   - Comment
-- Footer: Created On
+- Footer: Modified On
 
 ### Team Child Gallery
 
 - Title: full name
-- Pills: neutral role pill only
+- Pills: role
 - Metadata order:
   - Email
   - Phone Number
