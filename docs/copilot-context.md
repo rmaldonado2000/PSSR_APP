@@ -6,10 +6,11 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 
 ## Technology Stack
 
-- React 19 with TypeScript
+- React 19 listed in `package.json`
+- TypeScript
 - Vite build tool
 - Fluent UI React Components
-- Power Apps Code App
+- Vite/React application with Power Apps/Dataverse integration patterns. Power Apps Code App project type not confirmed from current codebase.
 - Dataverse CRUD via generated services
 - ESLint
 - Vitest
@@ -28,7 +29,7 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 - `PlansScreen`: Plan gallery, filtering, and navigation
 - `PlanDetailsScreen`: Plan metadata, checklists, deficiencies, approvals, and team information
 - `ChecklistDetailsScreen`: Checklist runner, question answering, and deficiencies
-- `TemplateLibraryScreen`: Checklist and question templates with role-aware visibility
+- `TemplateLibraryScreen`: Checklist and question templates. Role-aware visibility is present or referenced, but specific bypass behavior must be verified in code before changing it.
 
 ## Dataverse Integration
 
@@ -43,8 +44,9 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 - Checklist statuses: Not Started -> In Progress -> Completed
 - Deficiency statuses: Open -> In Progress -> Closed
 - Approval statuses include Approved, Rejected, Completed, and In Progress
-- Lifecycle transitions and UI locks are enforced in `lifecycle.ts` and `lifecycleTransitions.ts`
+- Lifecycle transitions and UI locks are enforced or referenced in `lifecycle.ts` and `lifecycleTransitions.ts`
 - Full lifecycle schema and behavior are documented in `docs/pssr-lifecycle-schema.md` and `docs/pssr-lifecycle-behavior.md`
+- Some lifecycle gates or approval blocking rules may not be implemented unless explicitly confirmed in lifecycle documentation and code
 
 ## UI / UX Standards
 
@@ -69,26 +71,3 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 - Team role `Originator` is inferred from the plan creator, not selected as a standard role option
 - Deficiency creation is only allowed from checklist questions answered `No` during the Execution phase
 - Production data seeding is not included in the current scaffold
-- Some lifecycle gates or approval blocking rules may not be implemented in the current scaffold unless explicitly confirmed in lifecycle documentation and code
-
-## Recent Relevant Changes
-
-- Lifecycle and UI lock rules are enforced in the client through lifecycle-related files
-- Gallery card and pill standards are documented
-- Template Library supports role-aware visibility
-- CRUD operations are routed through generated Dataverse services and repository patterns
-- This context file should be updated after each completed implementation change
-
-## Prompting Instructions for GitHub Copilot
-
-- Reference this file for app context, schema, lifecycle behavior, and UI standards
-- Inspect the current codebase before modifying files
-- Do not invent missing details; if not confirmed in code, state `Not confirmed from current codebase`
-- Follow the documented lifecycle, status, phase, and UI rules
-- Use only the documented Dataverse tables, option sets, generated models, generated services, and repository patterns unless the codebase clearly supports otherwise
-- For UI changes, use Fluent UI and the shared gallery, pill, card, and responsive layout standards
-- For new features, route CRUD through the repository/services layer
-- Reuse existing components and patterns before creating new ones
-- Avoid duplicate components, duplicate styling systems, parallel lifecycle logic, and hardcoded Dataverse choice values unless already established in the codebase
-- Do not modify or duplicate documentation files unless explicitly requested
-- After each implementation, update this file so it remains the latest context package for M365 Copilot
