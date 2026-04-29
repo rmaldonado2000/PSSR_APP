@@ -1,14 +1,14 @@
-import { Button, Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
-import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, MoreHorizontal24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
+import { Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
+import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
 import { Fragment, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { formatRoleLabel } from '../app/format';
 import { isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
 import type { ApprovalVm, ChecklistVm, DeficiencyVm, PlanDetailsDraftVm, PlanVm, TeamMemberVm } from '../app/types';
+import { mobileHeaderStyles } from '../components/mobileHeaderStyles';
 import { CardDate, DataState, GalleryCard, GalleryListItem, Pill, ResponsiveButton, SectionPanel, VirtualizedList } from '../components/ui';
 import type { PlanDetailsTab } from '../app/router';
 
 const MOBILE_TAB_QUERY = '(max-width: 700px)';
-const MOBILE_VISIBLE_TAB_COUNT = 3;
 const DESKTOP_CHECKLIST_ROW_HEIGHT = 128;
 const MOBILE_CHECKLIST_ROW_HEIGHT = 156;
 const DESKTOP_DEFICIENCY_ROW_HEIGHT = 188;
@@ -31,6 +31,7 @@ function getIsMobileTabLayout(): boolean {
 }
 
 const useStyles = makeStyles({
+  ...mobileHeaderStyles,
   screenPanel: {
     display: 'flex',
     flexDirection: 'column',
@@ -180,77 +181,6 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
     alignItems: 'end',
   },
-  pageTabs: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: '100%',
-    overflowX: 'hidden',
-    '@media (max-width: 700px)': {
-      '& [role="tab"]': {
-        flex: '1 1 0',
-        minWidth: 0,
-        justifyContent: 'center',
-        paddingLeft: tokens.spacingHorizontalXS,
-        paddingRight: tokens.spacingHorizontalXS,
-      },
-    },
-  },
-  tabsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: tokens.spacingHorizontalM,
-    '@media (max-width: 700px)': {
-      flexWrap: 'wrap',
-      alignItems: 'stretch',
-      gap: tokens.spacingHorizontalXS,
-    },
-  },
-  tabActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    flexShrink: 1,
-    position: 'relative',
-    '@media (max-width: 700px)': {
-      width: '100%',
-      justifyContent: 'flex-end',
-      flexWrap: 'wrap',
-      gap: tokens.spacingHorizontalXXS,
-    },
-  },
-  mobileOverflowButton: {
-    minWidth: '36px',
-    paddingLeft: tokens.spacingHorizontalS,
-    paddingRight: tokens.spacingHorizontalS,
-  },
-  mobileOverflowPanel: {
-    position: 'absolute',
-    top: 'calc(100% + 6px)',
-    right: 0,
-    zIndex: 2,
-    display: 'grid',
-    gap: tokens.spacingVerticalXXS,
-    minWidth: '180px',
-    padding: tokens.spacingHorizontalXS,
-    borderRadius: tokens.borderRadiusLarge,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow16,
-  },
-  mobileOverflowItem: {
-    justifyContent: 'flex-start',
-    width: '100%',
-  },
-  mobileTabLabel: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    '@media (max-width: 700px)': {
-      fontSize: tokens.fontSizeBase200,
-      lineHeight: tokens.lineHeightBase200,
-    },
-  },
   chipsRow: {
     display: 'flex',
     gap: tokens.spacingHorizontalS,
@@ -329,7 +259,6 @@ export interface PlanDetailsScreenProps {
 export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactNode {
   const styles = useStyles();
   const [isMobileTabLayout, setIsMobileTabLayout] = useState<boolean>(getIsMobileTabLayout);
-  const [isMobileOverflowOpen, setIsMobileOverflowOpen] = useState<boolean>(false);
   const progressValue = Math.max(0, Math.min(1, props.selectedPlan.percentComplete / 100));
   const currentStageIndex = PLAN_LIFECYCLE_STAGES.findIndex((stage) => stage.code === props.selectedPlan.stageCode);
   const normalizedCurrentStageIndex = currentStageIndex >= 0 ? currentStageIndex : 0;
@@ -349,16 +278,6 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
     };
   }, []);
 
-  useEffect(() => {
-    if (!isMobileTabLayout) {
-      setIsMobileOverflowOpen(false);
-    }
-  }, [isMobileTabLayout]);
-
-  useEffect(() => {
-    setIsMobileOverflowOpen(false);
-  }, [props.planTab]);
-
   const checklistTabLabel = `Checklists (${props.checklists.length})`;
   const deficiencyTabLabel = `Deficiencies (${props.deficiencies.length})`;
   const planTabs = useMemo(() => ([
@@ -369,17 +288,6 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
     { value: 'team' as PlanDetailsTab, label: 'Team', icon: <Person24Regular /> },
   ]), [checklistTabLabel, deficiencyTabLabel]);
 
-  const selectedTabIndex = Math.max(planTabs.findIndex((tab) => tab.value === props.planTab), 0);
-  const mobileVisibleStart = Math.min(
-    Math.max(selectedTabIndex - (MOBILE_VISIBLE_TAB_COUNT - 1), 0),
-    Math.max(planTabs.length - MOBILE_VISIBLE_TAB_COUNT, 0),
-  );
-  const visibleTabs = isMobileTabLayout
-    ? planTabs.slice(mobileVisibleStart, mobileVisibleStart + MOBILE_VISIBLE_TAB_COUNT)
-    : planTabs;
-  const overflowTabs = isMobileTabLayout
-    ? planTabs.filter((_, index) => index < mobileVisibleStart || index >= mobileVisibleStart + MOBILE_VISIBLE_TAB_COUNT)
-    : [];
   const checklistRowHeight = isMobileTabLayout ? MOBILE_CHECKLIST_ROW_HEIGHT : DESKTOP_CHECKLIST_ROW_HEIGHT;
   const deficiencyRowHeight = isMobileTabLayout ? MOBILE_DEFICIENCY_ROW_HEIGHT : DESKTOP_DEFICIENCY_ROW_HEIGHT;
   const approvalRowHeight = isMobileTabLayout ? MOBILE_APPROVAL_ROW_HEIGHT : DESKTOP_APPROVAL_ROW_HEIGHT;
@@ -477,18 +385,20 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
       )}
 
       <div className={styles.tabsRow}>
-        <TabList
-          className={styles.pageTabs}
-          selectedValue={props.planTab}
-          onTabSelect={(_, data) => props.onPlanTabChange(data.value as PlanDetailsTab)}
-          size={isMobileTabLayout ? 'medium' : 'large'}
-        >
-          {visibleTabs.map((tab) => (
-            <Tab key={tab.value} value={tab.value} icon={isMobileTabLayout ? undefined : tab.icon}>
-              <span className={styles.mobileTabLabel}>{tab.label}</span>
-            </Tab>
-          ))}
-        </TabList>
+        <div className={styles.tabScroller}>
+          <TabList
+            className={styles.pageTabs}
+            selectedValue={props.planTab}
+            onTabSelect={(_, data) => props.onPlanTabChange(data.value as PlanDetailsTab)}
+            size={isMobileTabLayout ? 'medium' : 'large'}
+          >
+            {planTabs.map((tab) => (
+              <Tab key={tab.value} value={tab.value} icon={isMobileTabLayout ? undefined : tab.icon}>
+                <span className={styles.mobileTabLabel}>{tab.label}</span>
+              </Tab>
+            ))}
+          </TabList>
+        </div>
 
         <div className={styles.tabActions}>
           {props.headerCommands.map((command) => (
@@ -502,44 +412,16 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
               onClick={command.onClick}
             />
           ))}
-          {overflowTabs.length > 0 && (
-            <>
-              <Button
-                appearance="subtle"
-                className={styles.mobileOverflowButton}
-                aria-label="More tabs"
-                aria-expanded={isMobileOverflowOpen}
-                icon={<MoreHorizontal24Regular />}
-                onClick={() => setIsMobileOverflowOpen((value) => !value)}
-              />
-              {isMobileOverflowOpen && (
-                <div className={styles.mobileOverflowPanel}>
-                  {overflowTabs.map((tab) => (
-                    <Button
-                      key={tab.value}
-                      appearance="subtle"
-                      className={styles.mobileOverflowItem}
-                      icon={tab.icon}
-                      onClick={() => {
-                        setIsMobileOverflowOpen(false);
-                        props.onPlanTabChange(tab.value);
-                      }}
-                    >
-                      {tab.label}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
           <ResponsiveButton appearance="subtle" icon={<ArrowClockwise24Regular />} label="Refresh Plan" onClick={props.onRefreshPlan} />
         </div>
       </div>
 
       {props.warningMessages.length > 0 && (
-        <MessageBar intent="warning">
-          <strong>Lifecycle conditions not met</strong>
-          <div>{props.warningMessages.join(' ')}</div>
+        <MessageBar intent="warning" className={styles.warningBar}>
+          <div className={styles.warningBody}>
+            <Text className={styles.warningTitle}>Lifecycle conditions not met</Text>
+            <Text className={styles.warningText}>{props.warningMessages.join(' ')}</Text>
+          </div>
         </MessageBar>
       )}
 

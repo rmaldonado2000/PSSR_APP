@@ -24,8 +24,8 @@ import {
   webLightTheme,
 } from '@fluentui/react-components';
 import { getContext } from '@microsoft/power-apps/app';
-import { Add24Regular, ArrowCircleRight16Regular, Briefcase16Regular, Building16Regular, CheckmarkCircle16Regular, ChevronDown16Regular, ChevronRight12Regular, ClipboardTask16Regular, Delete24Regular, DocumentMultiple24Regular, Home24Regular, Save24Regular, Wrench16Regular } from '@fluentui/react-icons';
-import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Add24Regular, ArrowCircleRight16Regular, ArrowLeft16Regular, Briefcase16Regular, Building16Regular, CheckmarkCircle16Regular, ChevronDown16Regular, ChevronRight12Regular, ClipboardTask16Regular, Delete24Regular, DocumentMultiple24Regular, Home24Regular, Save24Regular, Wrench16Regular } from '@fluentui/react-icons';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createApproval,
   copyTemplatesToPlan,
@@ -445,6 +445,12 @@ const useStyles = makeStyles({
       gap: tokens.spacingHorizontalS,
     },
   },
+  mobileBackButton: {
+    flex: '0 0 auto',
+    minWidth: 'auto',
+    paddingLeft: tokens.spacingHorizontalS,
+    paddingRight: tokens.spacingHorizontalS,
+  },
   breadcrumbLifecycleButton: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -709,12 +715,6 @@ type TeamMemberDraft = {
   memberId?: string;
   memberName: string;
   roleCode?: number;
-};
-
-type HeaderBreadcrumb = {
-  key: string;
-  label: string;
-  onClick?: () => void;
 };
 
 function getChecklistHeaderIcon(statusLabel: string | undefined) {
@@ -990,8 +990,9 @@ export default function App() {
   const [isTemplateQuestionOpen, setIsTemplateQuestionOpen] = useState<boolean>(false);
   const [templateQuestionDraft, setTemplateQuestionDraft] = useState<TemplateQuestionDraft>(createTemplateQuestionDraft());
   const [isChecklistTemplatePickerOpen, setIsChecklistTemplatePickerOpen] = useState<boolean>(false);
-  const [isPlanSummaryExpanded, setIsPlanSummaryExpanded] = useState<boolean>(() => !getIsMobileBreadcrumbLayout());
-  const [isChecklistSummaryExpanded, setIsChecklistSummaryExpanded] = useState<boolean>(() => !getIsMobileBreadcrumbLayout());
+  const [isPlanSummaryExpandedMobile, setIsPlanSummaryExpandedMobile] = useState<boolean>(() => !getIsMobileBreadcrumbLayout());
+  const [isChecklistSummaryExpandedMobile, setIsChecklistSummaryExpandedMobile] = useState<boolean>(() => !getIsMobileBreadcrumbLayout());
+  const [isMobileBreadcrumbLayout, setIsMobileBreadcrumbLayout] = useState<boolean>(getIsMobileBreadcrumbLayout);
 
   const [isDeficiencyOpen, setIsDeficiencyOpen] = useState<boolean>(false);
   const [deficiencyPopoutMode, setDeficiencyPopoutMode] = useState<DeficiencyPopoutMode>('editor');
@@ -2359,6 +2360,10 @@ export default function App() {
   }, [loadPlans, planDetailsDraft, plans, selectedPlan, siteOptions, stageOptions]);
 
   const onQuestionAnswer = useCallback((question: QuestionVm, responseCode: number) => {
+    if (!selectedPlan || !selectedChecklist || !isQuestionAnsweringEnabled(selectedPlan, approvals, selectedChecklist)) {
+      return;
+    }
+
     const responseLabel = optionSets.questionResponse[responseCode as keyof typeof optionSets.questionResponse];
 
     setQuestions((current) => current.map((item) => (
@@ -2372,9 +2377,13 @@ export default function App() {
     }
 
     trackFlow('question.response.staged', { questionId: question.id, responseCode });
-  }, [onOpenQuestionDeficiencyPopout]);
+  }, [approvals, onOpenQuestionDeficiencyPopout, selectedChecklist, selectedPlan]);
 
   const onSaveQuestionResponses = useCallback(async (): Promise<boolean> => {
+    if (!selectedPlan || !selectedChecklist || !isQuestionAnsweringEnabled(selectedPlan, approvals, selectedChecklist)) {
+      return false;
+    }
+
     const changedQuestions = questions.filter((question) => savedQuestionResponses[question.id] !== question.responseCode);
     if (changedQuestions.length === 0) {
       return true;
@@ -2444,7 +2453,7 @@ export default function App() {
     } finally {
       setIsSavingQuestionResponses(false);
     }
-  }, [approvals, lifecycleDependencies, questions, refreshCurrentPlanState, savedQuestionResponses, selectedChecklist, selectedPlan, selectedPlanLifecycleContext]);
+  }, [approvals, lifecycleDependencies, loadPlanChildren, questions, refreshCurrentPlanState, savedQuestionResponses, selectedChecklist, selectedPlan, selectedPlanLifecycleContext]);
 
   const onDiscardQuestionChangesAndContinue = useCallback(async () => {
     onDiscardQuestionChanges();
@@ -2755,62 +2764,37 @@ export default function App() {
     }
   }, [checklists, openPlan, selectedPlan, selectedTemplate]);
 
-  const pageHeader = useMemo((): { title: string; subtitle: string; breadcrumbs: HeaderBreadcrumb[] } => {
-    if (view === 'plan-details' && selectedPlan) {
-      return {
-        title: 'PSSR Details',
-        subtitle: `${selectedPlan.planId} - ${selectedPlan.name}`,
-        breadcrumbs: [
-          { key: 'plans', label: 'Plans', onClick: () => { requestQuestionNavigation(() => goPlans()); } },
-          { key: 'plan', label: selectedPlan.name },
-        ],
-      };
-    }
-
-    if (view === 'checklist-details' && selectedPlan && selectedChecklist) {
-      return {
-        title: 'Checklist Details',
-        subtitle: `${selectedChecklist.checklistId} - ${selectedChecklist.name}`,
-        breadcrumbs: [
-          { key: 'plans', label: 'Plans', onClick: () => { requestQuestionNavigation(() => goPlans()); } },
-          { key: 'plan', label: selectedPlan.name, onClick: () => { requestQuestionNavigation(() => goPlanDetails()); } },
-          { key: 'checklist', label: selectedChecklist.name },
-        ],
-      };
-    }
-
-    if (view === 'template-library') {
-      return {
-        title: 'Template Library',
-        subtitle: '',
-        breadcrumbs: selectedPlan
-          ? [
-              { key: 'plans', label: 'Plans', onClick: () => { requestQuestionNavigation(() => goPlans()); } },
-              { key: 'plan', label: selectedPlan.name, onClick: () => { requestQuestionNavigation(() => goPlanDetails()); } },
-              { key: 'templates', label: 'Templates' },
-            ]
-          : [{ key: 'templates', label: 'Templates' }],
-      };
-    }
-
-    return {
-      title: 'PSSR Management',
-      subtitle: '',
-      breadcrumbs: [{ key: 'plans', label: 'Plans' }],
-    };
-  }, [goPlanDetails, goPlans, requestQuestionNavigation, selectedChecklist, selectedPlan, view]);
+  let pageTitle = 'PSSR Management';
+  let pageSubtitle = '';
+  if (view === 'plan-details' && selectedPlan) {
+    pageTitle = 'PSSR Details';
+    pageSubtitle = `${selectedPlan.planId} - ${selectedPlan.name}`;
+  } else if (view === 'checklist-details' && selectedPlan && selectedChecklist) {
+    pageTitle = 'Checklist Details';
+    pageSubtitle = `${selectedChecklist.checklistId} - ${selectedChecklist.name}`;
+  } else if (view === 'template-library') {
+    pageTitle = 'Template Library';
+  }
   const selectedPlanStageLabel = selectedPlan?.stageLabel ?? 'Unknown phase';
   const selectedPlanStageIcon = getPlanHeaderIcon(selectedPlan?.stageLabel);
   const selectedChecklistStatusLabel = selectedChecklist?.statusLabel ?? 'Unknown status';
   const selectedChecklistStatusIcon = getChecklistHeaderIcon(selectedChecklist?.statusLabel);
+  const isPlanSummaryExpanded = !isMobileBreadcrumbLayout || isPlanSummaryExpandedMobile;
+  const isChecklistSummaryExpanded = !isMobileBreadcrumbLayout || isChecklistSummaryExpandedMobile;
 
   useEffect(() => {
-    setIsPlanSummaryExpanded(!getIsMobileBreadcrumbLayout());
-  }, [selectedPlan?.id, view]);
+    const mediaQuery = window.matchMedia(MOBILE_BREADCRUMB_QUERY);
+    const onChange = () => {
+      setIsMobileBreadcrumbLayout(mediaQuery.matches);
+    };
 
-  useEffect(() => {
-    setIsChecklistSummaryExpanded(!getIsMobileBreadcrumbLayout());
-  }, [selectedChecklist?.id, view]);
+    onChange();
+    mediaQuery.addEventListener('change', onChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', onChange);
+    };
+  }, []);
 
   return (
     <FluentProvider theme={webLightTheme} applyStylesToPortals className={styles.root}>
@@ -2820,8 +2804,8 @@ export default function App() {
             <div className={styles.appHeaderTitleRow}>
               <div className={styles.appHeaderTitleLeft}>
                 <div className={styles.appHeaderTitleGroup}>
-                  <Title2 className={styles.appHeaderScreenTitle}>{pageHeader.title}</Title2>
-                  {pageHeader.subtitle ? <Caption1 className={styles.appHeaderScreenSubtitle}>{pageHeader.subtitle}</Caption1> : null}
+                  <Title2 className={styles.appHeaderScreenTitle}>{pageTitle}</Title2>
+                  {pageSubtitle ? <Caption1 className={styles.appHeaderScreenSubtitle}>{pageSubtitle}</Caption1> : null}
                 </div>
               </div>
             </div>
@@ -2892,29 +2876,90 @@ export default function App() {
         )}>
           {view !== 'plans' && (
             <div className={styles.breadcrumbRow}>
-              <nav aria-label="Breadcrumb" className={styles.breadcrumbNav}>
-                {pageHeader.breadcrumbs.map((breadcrumb, index) => (
-                  <Fragment key={breadcrumb.key}>
-                    {index > 0 && <ChevronRight12Regular className={styles.breadcrumbSeparator} />}
-                    {breadcrumb.onClick ? (
-                      <Link className={styles.breadcrumbLink} onClick={breadcrumb.onClick}>
-                        {breadcrumb.label}
+              {isMobileBreadcrumbLayout && view === 'plan-details' && selectedPlan ? (
+                <Button
+                  appearance="subtle"
+                  className={styles.mobileBackButton}
+                  icon={<ArrowLeft16Regular />}
+                  onClick={() => { requestQuestionNavigation(() => goPlans()); }}
+                >
+                  Back
+                </Button>
+              ) : isMobileBreadcrumbLayout && (view === 'checklist-details' && selectedPlan && selectedChecklist) ? (
+                <Button
+                  appearance="subtle"
+                  className={styles.mobileBackButton}
+                  icon={<ArrowLeft16Regular />}
+                  onClick={() => { requestQuestionNavigation(() => goPlanDetails()); }}
+                >
+                  Back
+                </Button>
+              ) : isMobileBreadcrumbLayout && view === 'template-library' && selectedPlan ? (
+                <Button
+                  appearance="subtle"
+                  className={styles.mobileBackButton}
+                  icon={<ArrowLeft16Regular />}
+                  onClick={() => { requestQuestionNavigation(() => goPlanDetails()); }}
+                >
+                  Back
+                </Button>
+              ) : (
+                <nav aria-label="Breadcrumb" className={styles.breadcrumbNav}>
+                  {view === 'plan-details' && selectedPlan && (
+                    <>
+                      <Link className={styles.breadcrumbLink} onClick={() => { requestQuestionNavigation(() => goPlans()); }}>
+                        Plans
                       </Link>
-                    ) : (
+                      <ChevronRight12Regular className={styles.breadcrumbSeparator} />
                       <span aria-current="page">
-                        <Text className={styles.breadcrumbActive}>{breadcrumb.label}</Text>
+                        <Text className={styles.breadcrumbActive}>{selectedPlan.name}</Text>
                       </span>
-                    )}
-                  </Fragment>
-                ))}
-              </nav>
+                    </>
+                  )}
+                  {view === 'checklist-details' && selectedPlan && selectedChecklist && (
+                    <>
+                      <Link className={styles.breadcrumbLink} onClick={() => { requestQuestionNavigation(() => goPlans()); }}>
+                        Plans
+                      </Link>
+                      <ChevronRight12Regular className={styles.breadcrumbSeparator} />
+                      <Link className={styles.breadcrumbLink} onClick={() => { requestQuestionNavigation(() => goPlanDetails()); }}>
+                        {selectedPlan.name}
+                      </Link>
+                      <ChevronRight12Regular className={styles.breadcrumbSeparator} />
+                      <span aria-current="page">
+                        <Text className={styles.breadcrumbActive}>{selectedChecklist.name}</Text>
+                      </span>
+                    </>
+                  )}
+                  {view === 'template-library' && selectedPlan && (
+                    <>
+                      <Link className={styles.breadcrumbLink} onClick={() => { requestQuestionNavigation(() => goPlans()); }}>
+                        Plans
+                      </Link>
+                      <ChevronRight12Regular className={styles.breadcrumbSeparator} />
+                      <Link className={styles.breadcrumbLink} onClick={() => { requestQuestionNavigation(() => goPlanDetails()); }}>
+                        {selectedPlan.name}
+                      </Link>
+                      <ChevronRight12Regular className={styles.breadcrumbSeparator} />
+                      <span aria-current="page">
+                        <Text className={styles.breadcrumbActive}>Templates</Text>
+                      </span>
+                    </>
+                  )}
+                  {view === 'template-library' && !selectedPlan && (
+                    <span aria-current="page">
+                      <Text className={styles.breadcrumbActive}>Templates</Text>
+                    </span>
+                  )}
+                </nav>
+              )}
               {view === 'plan-details' && selectedPlan && (
                 <Button
                   appearance="subtle"
                   className={styles.breadcrumbLifecycleButton}
                   icon={<span className={styles.breadcrumbLifecycleIcon}>{selectedPlanStageIcon}</span>}
                   iconPosition="before"
-                  onClick={() => setIsPlanSummaryExpanded((expanded) => !expanded)}
+                  onClick={() => setIsPlanSummaryExpandedMobile((expanded) => !expanded)}
                 >
                   <span className={styles.breadcrumbLifecycleLabel}>
                     <span className={styles.breadcrumbLifecycleText}>{selectedPlanStageLabel}</span>
@@ -2928,7 +2973,7 @@ export default function App() {
                   className={styles.breadcrumbLifecycleButton}
                   icon={<span className={styles.breadcrumbLifecycleIcon}>{selectedChecklistStatusIcon}</span>}
                   iconPosition="before"
-                  onClick={() => setIsChecklistSummaryExpanded((expanded) => !expanded)}
+                  onClick={() => setIsChecklistSummaryExpandedMobile((expanded) => !expanded)}
                 >
                   <span className={styles.breadcrumbLifecycleLabel}>
                     <span className={styles.breadcrumbLifecycleText}>{selectedChecklistStatusLabel}</span>

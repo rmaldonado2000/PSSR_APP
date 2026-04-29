@@ -54,6 +54,9 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 - Gallery/list cards follow the shared anatomy documented in `docs/ui-gallery-card-anatomy.md`
 - Pills/badges follow the token and color standard documented in `docs/ui-pill-standard.md`
 - Responsive design is required for mobile and desktop
+- Plan and checklist detail headers use a single-row mobile tab strip with horizontal overflow; action buttons remain in a non-wrapping trailing region
+- Mobile detail breadcrumbs collapse to a single back control; desktop retains the full breadcrumb trail
+- Checklist lifecycle warnings render as a full-width banner above the question gallery and must not reduce gallery width or clip content
 - Pill and accent rendering uses `getPillStyle` and `getAccentColor` from `ui/tokens/pillTokens.ts`
 - Styles are centralized through `index.css` and Fluent `makeStyles`
 
@@ -70,4 +73,5 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 - Plan phase changes are command-driven; manual phase editing is not part of the current behavior
 - Team role `Originator` is inferred from the plan creator, not selected as a standard role option
 - Deficiency creation is only allowed from checklist questions answered `No` during the Execution phase
+- Checklist answer interactions must respect `isQuestionAnsweringEnabled`; when disabled, both touch-swipe staging and save handlers must block response writes
 - Production data seeding is not included in the current scaffold

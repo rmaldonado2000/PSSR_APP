@@ -1,12 +1,12 @@
 import { Button, Field, Input, MessageBar, ProgressBar, Tab, TabList, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
-import { Add24Regular, Checkmark24Regular, ClipboardTask24Regular, DismissCircle24Regular, Info24Regular, MoreHorizontal24Regular, Save24Regular, Warning24Filled } from '@fluentui/react-icons';
+import { Add24Regular, Checkmark24Regular, ClipboardTask24Regular, DismissCircle24Regular, Info24Regular, Save24Regular, Warning24Filled } from '@fluentui/react-icons';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import type { ChecklistVm, DeficiencyVm, PlanVm, QuestionVm } from '../app/types';
+import { mobileHeaderStyles } from '../components/mobileHeaderStyles';
 import { DataState, GalleryListItem, Pill, ResponsiveButton, GalleryCard, CardDate, SectionPanel, VirtualizedList } from '../components/ui';
 import type { ChecklistDetailsTab } from '../app/router';
 
 const MOBILE_TAB_QUERY = '(max-width: 700px)';
-const MOBILE_VISIBLE_TAB_COUNT = 3;
 const SWIPE_PREVIEW_LIMIT = 96;
 const SWIPE_TRIGGER_DISTANCE = 84;
 
@@ -15,6 +15,7 @@ function getIsMobileTabLayout(): boolean {
 }
 
 const useStyles = makeStyles({
+  ...mobileHeaderStyles,
   screenPanel: {
     display: 'flex',
     flexDirection: 'column',
@@ -57,72 +58,6 @@ const useStyles = makeStyles({
   summaryProgressBar: {
     flex: '1 1 180px',
     minWidth: '140px',
-  },
-  pageTabs: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: '100%',
-    overflowX: 'hidden',
-    '@media (max-width: 700px)': {
-      '& [role="tab"]': {
-        flex: '1 1 0',
-        minWidth: 0,
-        justifyContent: 'center',
-        paddingLeft: tokens.spacingHorizontalXS,
-        paddingRight: tokens.spacingHorizontalXS,
-      },
-    },
-  },
-  tabsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: tokens.spacingHorizontalM,
-    '@media (max-width: 700px)': {
-      gap: tokens.spacingHorizontalXS,
-    },
-  },
-  tabActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    flexShrink: 0,
-    position: 'relative',
-    '@media (max-width: 700px)': {
-      gap: tokens.spacingHorizontalXXS,
-    },
-  },
-  mobileOverflowButton: {
-    minWidth: '36px',
-    paddingLeft: tokens.spacingHorizontalS,
-    paddingRight: tokens.spacingHorizontalS,
-  },
-  mobileOverflowPanel: {
-    position: 'absolute',
-    top: 'calc(100% + 6px)',
-    right: 0,
-    zIndex: 2,
-    display: 'grid',
-    gap: tokens.spacingVerticalXXS,
-    minWidth: '180px',
-    padding: tokens.spacingHorizontalXS,
-    borderRadius: tokens.borderRadiusLarge,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow16,
-  },
-  mobileOverflowItem: {
-    justifyContent: 'flex-start',
-    width: '100%',
-  },
-  mobileTabLabel: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    '@media (max-width: 700px)': {
-      fontSize: tokens.fontSizeBase200,
-      lineHeight: tokens.lineHeightBase200,
-    },
   },
   detailsGrid: {
     display: 'grid',
@@ -289,13 +224,21 @@ const useStyles = makeStyles({
     display: 'grid',
     gap: tokens.spacingVerticalM,
     minHeight: 0,
+    minWidth: 0,
     flex: '1 1 auto',
     gridTemplateRows: 'auto minmax(0, 1fr)',
+  },
+  questionHeader: {
+    display: 'grid',
+    gap: tokens.spacingVerticalS,
+    minWidth: 0,
   },
   questionGalleryRegion: {
     display: 'grid',
     height: '100%',
     minHeight: 0,
+    minWidth: 0,
+    width: '100%',
     overflow: 'hidden',
   },
   mobileQuestionList: {
@@ -346,6 +289,8 @@ const useStyles = makeStyles({
     gridTemplateRows: 'minmax(0, 1fr) auto',
     height: '100%',
     minHeight: 0,
+    minWidth: 0,
+    width: '100%',
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: tokens.borderRadiusLarge,
     backgroundColor: tokens.colorNeutralBackground1,
@@ -356,6 +301,8 @@ const useStyles = makeStyles({
     gap: '2px',
     padding: tokens.spacingHorizontalXS,
     minHeight: 0,
+    minWidth: 0,
+    overflowX: 'hidden',
     overflowY: 'auto',
   },
   mobileQuestionListFooter: {
@@ -417,7 +364,6 @@ export interface ChecklistDetailsScreenProps {
 export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProps): ReactNode {
   const styles = useStyles();
   const [isMobileTabLayout, setIsMobileTabLayout] = useState<boolean>(getIsMobileTabLayout);
-  const [isMobileOverflowOpen, setIsMobileOverflowOpen] = useState<boolean>(false);
   const [swipeQuestionId, setSwipeQuestionId] = useState<string | null>(null);
   const [swipeOffset, setSwipeOffset] = useState<number>(0);
   const swipeStartRef = useRef<{ questionId: string; x: number; y: number } | null>(null);
@@ -435,16 +381,6 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
       mediaQuery.removeEventListener('change', onChange);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isMobileTabLayout) {
-      setIsMobileOverflowOpen(false);
-    }
-  }, [isMobileTabLayout]);
-
-  useEffect(() => {
-    setIsMobileOverflowOpen(false);
-  }, [props.checklistTab]);
 
   const sortedQuestions = useMemo(
     () => [...props.questions].sort((a, b) => a.sequenceOrder - b.sequenceOrder),
@@ -468,17 +404,6 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
     { value: 'details' as ChecklistDetailsTab, label: 'Details', icon: <Info24Regular /> },
     { value: 'deficiencies' as ChecklistDetailsTab, label: `Deficiencies (${checklistDeficiencies.length})`, icon: <DismissCircle24Regular /> },
   ]), [checklistDeficiencies.length, questionTabLabel]);
-  const selectedTabIndex = Math.max(checklistTabs.findIndex((tab) => tab.value === props.checklistTab), 0);
-  const mobileVisibleStart = Math.min(
-    Math.max(selectedTabIndex - (MOBILE_VISIBLE_TAB_COUNT - 1), 0),
-    Math.max(checklistTabs.length - MOBILE_VISIBLE_TAB_COUNT, 0),
-  );
-  const visibleTabs = isMobileTabLayout
-    ? checklistTabs.slice(mobileVisibleStart, mobileVisibleStart + MOBILE_VISIBLE_TAB_COUNT)
-    : checklistTabs;
-  const overflowTabs = isMobileTabLayout
-    ? checklistTabs.filter((_, index) => index < mobileVisibleStart || index >= mobileVisibleStart + MOBILE_VISIBLE_TAB_COUNT)
-    : [];
   const deficiencyCountByQuestionId = useMemo(() => {
     return props.deficiencies.reduce((counts, item) => {
       if (!item.questionId) {
@@ -502,6 +427,7 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
     () => props.responseOptions.find((option) => option.label.trim().toLowerCase() === 'no'),
     [props.responseOptions],
   );
+  const isSwipeAnsweringEnabled = props.isQuestionAnsweringEnabled && Boolean(yesResponseOption && noResponseOption);
 
   const isMissingDeficiency = (question: QuestionVm): boolean => {
     return getResponseLabel(question.responseCode) === 'No' && !deficiencyCountByQuestionId.has(question.id);
@@ -552,7 +478,7 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
   };
 
   const handleQuestionTouchStart = (questionId: string, event: TouchEvent<HTMLDivElement>): void => {
-    if (!yesResponseOption || !noResponseOption) {
+    if (!isSwipeAnsweringEnabled) {
       return;
     }
 
@@ -567,6 +493,11 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
   };
 
   const handleQuestionTouchMove = (questionId: string, event: TouchEvent<HTMLDivElement>): void => {
+    if (!isSwipeAnsweringEnabled) {
+      resetSwipeState();
+      return;
+    }
+
     const swipeStart = swipeStartRef.current;
     if (!swipeStart || swipeStart.questionId !== questionId) {
       return;
@@ -590,6 +521,11 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
   };
 
   const handleQuestionTouchEnd = (question: QuestionVm, event: TouchEvent<HTMLDivElement>): void => {
+    if (!isSwipeAnsweringEnabled) {
+      resetSwipeState();
+      return;
+    }
+
     const swipeStart = swipeStartRef.current;
     if (!swipeStart || swipeStart.questionId !== question.id) {
       resetSwipeState();
@@ -637,19 +573,22 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
       )}
 
       <div className={styles.questionSection}>
+        <div className={styles.questionHeader}>
           <div className={styles.tabsRow}>
-            <TabList
-              className={styles.pageTabs}
-              selectedValue={props.checklistTab}
-              onTabSelect={(_, data) => props.onChecklistTabChange(data.value as ChecklistDetailsTab)}
-              size={isMobileTabLayout ? 'medium' : 'large'}
-            >
-              {visibleTabs.map((tab) => (
-                <Tab key={tab.value} value={tab.value} icon={isMobileTabLayout ? undefined : tab.icon}>
-                  <span className={styles.mobileTabLabel}>{tab.label}</span>
-                </Tab>
-              ))}
-            </TabList>
+            <div className={styles.tabScroller}>
+              <TabList
+                className={styles.pageTabs}
+                selectedValue={props.checklistTab}
+                onTabSelect={(_, data) => props.onChecklistTabChange(data.value as ChecklistDetailsTab)}
+                size={isMobileTabLayout ? 'medium' : 'large'}
+              >
+                {checklistTabs.map((tab) => (
+                  <Tab key={tab.value} value={tab.value} icon={isMobileTabLayout ? undefined : tab.icon}>
+                    <span className={styles.mobileTabLabel}>{tab.label}</span>
+                  </Tab>
+                ))}
+              </TabList>
+            </div>
 
             <div className={styles.tabActions}>
               <ResponsiveButton
@@ -660,45 +599,18 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                 title={props.completeChecklistTitle}
                 onClick={props.onCompleteChecklist}
               />
-              {overflowTabs.length > 0 && (
-                <>
-                  <Button
-                    appearance="subtle"
-                    className={styles.mobileOverflowButton}
-                    aria-label="More tabs"
-                    aria-expanded={isMobileOverflowOpen}
-                    icon={<MoreHorizontal24Regular />}
-                    onClick={() => setIsMobileOverflowOpen((value) => !value)}
-                  />
-                  {isMobileOverflowOpen && (
-                    <div className={styles.mobileOverflowPanel}>
-                      {overflowTabs.map((tab) => (
-                        <Button
-                          key={tab.value}
-                          appearance="subtle"
-                          className={styles.mobileOverflowItem}
-                          icon={tab.icon}
-                          onClick={() => {
-                            setIsMobileOverflowOpen(false);
-                            props.onChecklistTabChange(tab.value);
-                          }}
-                        >
-                          {tab.label}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </div>
 
           {props.warningMessages.length > 0 && (
-            <MessageBar intent="warning">
-              <strong>Lifecycle conditions not met</strong>
-              <div>{props.warningMessages.join(' ')}</div>
+            <MessageBar intent="warning" className={styles.warningBar}>
+              <div className={styles.warningBody}>
+                <Text className={styles.warningTitle}>Lifecycle conditions not met</Text>
+                <Text className={styles.warningText}>{props.warningMessages.join(' ')}</Text>
+              </div>
             </MessageBar>
           )}
+        </div>
 
           {props.checklistTab === 'details' && (
             <SectionPanel title="Checklist Details">
@@ -779,36 +691,42 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                   {sortedQuestions.map((question) => (
                     <div key={question.id} className={styles.mobileQuestionList}>
                       <div className={styles.swipeRowShell}>
-                        <div className={styles.swipeBackground} aria-hidden="true">
-                          <div
-                            className={mergeClasses(
-                              styles.swipeAction,
-                              styles.swipeActionYes,
-                              swipeQuestionId === question.id && swipeOffset > 24 ? styles.swipeActionVisible : '',
-                            )}
-                          >
-                            Swipe for {yesResponseOption?.label ?? 'Yes'}
+                        {isSwipeAnsweringEnabled && (
+                          <div className={styles.swipeBackground} aria-hidden="true">
+                            <div
+                              className={mergeClasses(
+                                styles.swipeAction,
+                                styles.swipeActionYes,
+                                swipeQuestionId === question.id && swipeOffset > 24 ? styles.swipeActionVisible : '',
+                              )}
+                            >
+                              Swipe for {yesResponseOption?.label ?? 'Yes'}
+                            </div>
+                            <div
+                              className={mergeClasses(
+                                styles.swipeAction,
+                                styles.swipeActionNo,
+                                swipeQuestionId === question.id && swipeOffset < -24 ? styles.swipeActionVisible : '',
+                              )}
+                            >
+                              Swipe for {noResponseOption?.label ?? 'No'}
+                            </div>
                           </div>
-                          <div
-                            className={mergeClasses(
-                              styles.swipeAction,
-                              styles.swipeActionNo,
-                              swipeQuestionId === question.id && swipeOffset < -24 ? styles.swipeActionVisible : '',
-                            )}
-                          >
-                            Swipe for {noResponseOption?.label ?? 'No'}
-                          </div>
-                        </div>
+                        )}
                         <div
-                          className={mergeClasses(styles.questionRow, styles.questionRowSwipeable, getQuestionRowClassName(question))}
+                          className={mergeClasses(
+                            styles.questionRow,
+                            isSwipeAnsweringEnabled ? styles.questionRowSwipeable : '',
+                            getQuestionRowClassName(question),
+                          )}
                           style={{
                             transform: swipeQuestionId === question.id ? `translateX(${swipeOffset}px)` : 'translateX(0)',
                             transition: swipeQuestionId === question.id ? 'none' : 'transform 160ms ease-out',
                           }}
-                          onTouchStart={(event) => handleQuestionTouchStart(question.id, event)}
-                          onTouchMove={(event) => handleQuestionTouchMove(question.id, event)}
-                          onTouchEnd={(event) => handleQuestionTouchEnd(question, event)}
-                          onTouchCancel={resetSwipeState}
+                          onTouchStart={isSwipeAnsweringEnabled ? (event) => handleQuestionTouchStart(question.id, event) : undefined}
+                          onTouchMove={isSwipeAnsweringEnabled ? (event) => handleQuestionTouchMove(question.id, event) : undefined}
+                          onTouchEnd={isSwipeAnsweringEnabled ? (event) => handleQuestionTouchEnd(question, event) : undefined}
+                          onTouchCancel={isSwipeAnsweringEnabled ? resetSwipeState : undefined}
                         >
                           <div className={styles.sequenceCell}>
                             <Pill kind="neutral" value={String(question.sequenceOrder)} />
