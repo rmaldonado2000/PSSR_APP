@@ -1,7 +1,5 @@
 import {
   Button,
-  Caption1,
-  Card,
   Drawer,
   DrawerBody,
   DrawerHeader,
@@ -13,8 +11,6 @@ import {
   InteractionTagPrimary,
   InteractionTagSecondary,
   Option,
-  ProgressBar,
-  Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
@@ -30,8 +26,7 @@ import {
 } from '@fluentui/react-icons';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { PlanVm } from '../app/types';
-import { getCardAccentStyle } from '../components/CardAccent/CardAccent';
-import { DataState, GalleryListItem, Pill, ResponsiveButton, SectionPanel, VirtualizedList } from '../components/ui';
+import { CardDate, DataState, GalleryCard, GalleryListItem, Pill, ResponsiveButton, SectionPanel, VirtualizedList } from '../components/ui';
 import { t } from '../app/i18n';
 
 const ALL_OPTION_VALUE = '__all__';
@@ -124,80 +119,6 @@ const useStyles = makeStyles({
     display: 'grid',
     minHeight: 0,
     overflow: 'hidden',
-  },
-  planCard: {
-    cursor: 'pointer',
-    borderRadius: tokens.borderRadiusLarge,
-    borderLeftWidth: '5px',
-    borderLeftStyle: 'solid',
-    ':focus-visible': {
-      outline: `2px solid ${tokens.colorCompoundBrandStroke}`,
-      outlineOffset: '1px',
-    },
-  },
-  cardBody: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalXXS,
-  },
-  topRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    minWidth: 0,
-    flexWrap: 'wrap',
-  },
-  planId: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    lineHeight: tokens.lineHeightBase200,
-    flexShrink: 0,
-  },
-  progressSummary: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(120px, 1fr) auto',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-    flex: '1 1 220px',
-    minWidth: 0,
-  },
-  badgesRow: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalXS,
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  planName: {
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: tokens.lineHeightBase500,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  metaField: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalXXS,
-    alignItems: 'baseline',
-    color: tokens.colorNeutralForeground2,
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  metaLabel: {
-    color: tokens.colorNeutralForeground3,
-    flexShrink: 0,
-  },
-  metaText: {
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  progressTrack: {
-    minWidth: 0,
-  },
-  progressLabel: {
-    color: tokens.colorNeutralForeground2,
-    whiteSpace: 'nowrap',
   },
 });
 
@@ -425,59 +346,29 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
             row={(plan) => {
               return (
                 <GalleryListItem inset>
-                  <Card
-                    className={styles.planCard}
-                    style={getCardAccentStyle('phase', plan.stageLabel ?? '')}
+                  <GalleryCard
+                    accentKind="phase"
+                    accentValue={plan.stageLabel ?? ''}
                     onClick={() => props.onOpenPlan(plan)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        props.onOpenPlan(plan);
-                      }
+                    title={`${plan.planId} - ${plan.name}`}
+                    pills={(
+                      <>
+                        <Pill kind="phase" value={plan.stageLabel ?? 'No Stage'} icon={<ArrowCircleRight16Regular />} />
+                        <Pill kind="neutral" value={plan.typeLabel ?? 'No Type'} icon={<Tag16Regular />} />
+                        <Pill kind="neutral" value={plan.siteLabel ?? 'No Site'} icon={<Location16Regular />} />
+                        {plan.mocName ? <Pill kind="neutral" value={plan.mocName} icon={<Link16Regular />} /> : null}
+                      </>
+                    )}
+                    progress={{
+                      value: plan.percentComplete / 100,
+                      label: `${plan.checklistCompletedCount}/${plan.checklistTotalCount}`,
                     }}
-                    tabIndex={0}
-                    appearance="filled-alternative"
-                    size="small"
-                  >
-                    <div className={styles.cardBody}>
-                      {/* Row 1: autonumber Plan ID (left) + stage/type/site/moc badges (right) */}
-                      <div className={styles.topRow}>
-                        <Caption1 className={styles.planId}># {plan.planId}</Caption1>
-                        <div className={styles.progressSummary}>
-                          <ProgressBar
-                            className={styles.progressTrack}
-                            value={Math.max(0, Math.min(1, plan.percentComplete / 100))}
-                          />
-                          <Caption1 className={styles.progressLabel}>
-                            {plan.checklistCompletedCount}/{plan.checklistTotalCount}
-                          </Caption1>
-                        </div>
-                        <div className={styles.badgesRow}>
-                          <Pill kind="phase" value={plan.stageLabel ?? 'No Stage'} icon={<ArrowCircleRight16Regular />} />
-                          <Pill kind="neutral" value={plan.typeLabel ?? 'No Type'} icon={<Tag16Regular />} />
-                          <Pill kind="neutral" value={plan.siteLabel ?? 'No Site'} icon={<Location16Regular />} />
-                          {plan.mocName && (
-                            <Pill kind="neutral" value={plan.mocName} icon={<Link16Regular />} />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Row 2: Plan name – big and bold */}
-                      <Text className={styles.planName}>{plan.name}</Text>
-
-                      {/* Row 3: Event value */}
-                      <span className={styles.metaField}>
-                        <Caption1 className={styles.metaLabel}>Event:</Caption1>
-                        <Caption1 className={styles.metaText}>{plan.event ?? '—'}</Caption1>
-                      </span>
-
-                      {/* Row 4: System value */}
-                      <span className={styles.metaField}>
-                        <Caption1 className={styles.metaLabel}>System:</Caption1>
-                        <Caption1 className={styles.metaText}>{plan.system ?? '—'}</Caption1>
-                      </span>
-                    </div>
-                  </Card>
+                    meta={[
+                      { label: 'Event', value: plan.event },
+                      { label: 'System', value: plan.system },
+                    ]}
+                    footer={<CardDate value={plan.createdOn} />}
+                  />
                 </GalleryListItem>
               );
             }}

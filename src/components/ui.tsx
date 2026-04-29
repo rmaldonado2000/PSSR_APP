@@ -8,6 +8,7 @@ import {
   makeStyles,
   mergeClasses,
   MessageBar,
+  ProgressBar,
   Spinner,
   Subtitle2,
   tokens,
@@ -16,6 +17,7 @@ import { Dismiss24Regular } from '@fluentui/react-icons';
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactElement, type ReactNode } from 'react';
 import { getCardAccentColor } from './CardAccent/CardAccent';
 import type { PillKind } from '../ui/tokens/pillTokens';
+import { formatDate } from '../app/format';
 import { List } from 'react-window';
 
 export { default as Pill } from './Pill/Pill';
@@ -81,34 +83,18 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: tokens.spacingHorizontalS,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     '@media (max-width: 700px)': {
       gap: tokens.spacingHorizontalXS,
+      flexWrap: 'wrap',
     },
   },
   rowCardTitleGroup: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: tokens.spacingHorizontalS,
+    display: 'grid',
     minWidth: 0,
     flex: '1 1 240px',
     '@media (max-width: 700px)': {
-      gap: tokens.spacingHorizontalXS,
       flexBasis: '180px',
-    },
-  },
-  rowCardIcon: {
-    display: 'grid',
-    placeItems: 'center',
-    width: '32px',
-    height: '32px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
-    color: tokens.colorNeutralForeground2,
-    flexShrink: 0,
-    '@media (max-width: 700px)': {
-      width: '28px',
-      height: '28px',
     },
   },
   rowCardText: {
@@ -123,19 +109,34 @@ const useStyles = makeStyles({
   },
   rowCardSubtitle: {
     color: tokens.colorNeutralForeground3,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    overflowWrap: 'anywhere',
   },
   rowCardBadges: {
     display: 'flex',
     gap: tokens.spacingHorizontalXS,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
+    flex: '0 1 auto',
+    maxWidth: '40%',
     '@media (max-width: 700px)': {
       gap: tokens.spacingHorizontalXXS,
+      maxWidth: '100%',
+      width: '100%',
     },
+  },
+  rowCardProgressRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+  rowCardProgressBar: {
+    minWidth: 0,
+  },
+  rowCardProgressLabel: {
+    color: tokens.colorNeutralForeground3,
+    whiteSpace: 'nowrap',
   },
   rowCardMetaList: {
     display: 'grid',
@@ -157,6 +158,35 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  },
+  rowCardMetaTextClamp: {
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    '@media (max-width: 700px)': {
+      display: 'block',
+      WebkitLineClamp: 'unset',
+    },
+  },
+  rowCardMetaTextWrap: {
+    whiteSpace: 'normal',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  },
+  rowCardFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    paddingTop: tokens.spacingVerticalXXS,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    color: tokens.colorNeutralForeground3,
   },
   listShell: {
     display: 'grid',
@@ -422,18 +452,67 @@ export function ResponsiveButton(props: {
   );
 }
 
-export function RowCard(props: {
+export function CardPillStack(props: {
+  children: ReactNode;
+  className?: string;
+}): ReactNode {
+  const styles = useStyles();
+
+  return <div className={mergeClasses(styles.rowCardBadges, props.className)}>{props.children}</div>;
+}
+
+export function CardMetaRow(props: {
+  label: string;
+  value?: ReactNode;
+  valueBehavior?: 'truncate' | 'clamp' | 'wrap';
+}): ReactNode {
+  const styles = useStyles();
+  const valueClassName = props.valueBehavior === 'clamp'
+    ? styles.rowCardMetaTextClamp
+    : props.valueBehavior === 'wrap'
+      ? styles.rowCardMetaTextWrap
+      : styles.rowCardMetaText;
+
+  return (
+    <span className={styles.rowCardMetaField}>
+      <Caption1 className={styles.rowCardMetaLabel}>{props.label}:</Caption1>
+      <Caption1 className={valueClassName}>
+        {typeof props.value === 'string'
+          ? (props.value.trim() ? props.value : '—')
+          : (props.value ?? '—')}
+      </Caption1>
+    </span>
+  );
+}
+
+export function CardDate(props: {
+  label?: string;
+  value?: string;
+}): ReactNode {
+  const styles = useStyles();
+
+  return (
+    <div className={styles.rowCardFooter}>
+      <Caption1>{props.label ?? 'Created On'}</Caption1>
+      <Caption1>{formatDate(props.value)}</Caption1>
+    </div>
+  );
+}
+
+export function GalleryCard(props: {
   title: string;
   subtitle?: string;
   onClick?: () => void;
-  right?: ReactElement;
-  details?: ReactNode;
-  icon?: ReactElement;
   accentKind?: PillKind;
   accentValue?: string;
   accentColor?: string;
-  badges?: ReactNode;
-  meta?: Array<{ label: string; value?: ReactNode }>;
+  pills?: ReactNode;
+  progress?: {
+    value: number;
+    label?: string;
+  };
+  meta?: Array<{ label: string; value?: ReactNode; valueBehavior?: 'truncate' | 'clamp' | 'wrap' }>;
+  footer?: ReactNode;
 }): ReactNode {
   const styles = useStyles();
   const accentColor = props.accentKind
@@ -458,32 +537,62 @@ export function RowCard(props: {
       <div className={styles.rowCardBody}>
         <div className={styles.rowCardTopRow}>
           <div className={styles.rowCardTitleGroup}>
-            {props.icon ? <div className={styles.rowCardIcon}>{props.icon}</div> : null}
             <div className={styles.rowCardText}>
               <Subtitle2 className={styles.rowCardTitle}>{props.title}</Subtitle2>
               {props.subtitle ? <Caption1 className={styles.rowCardSubtitle}>{props.subtitle}</Caption1> : null}
             </div>
           </div>
-          {props.badges ? <div className={styles.rowCardBadges}>{props.badges}</div> : props.right}
+          {props.pills ? <CardPillStack>{props.pills}</CardPillStack> : null}
         </div>
+        {props.progress ? (
+          <div className={styles.rowCardProgressRow}>
+            <ProgressBar className={styles.rowCardProgressBar} value={Math.max(0, Math.min(1, props.progress.value))} />
+            {props.progress.label ? <Caption1 className={styles.rowCardProgressLabel}>{props.progress.label}</Caption1> : null}
+          </div>
+        ) : null}
         {props.meta?.length ? (
           <div className={styles.rowCardMetaList}>
             {props.meta.map((field) => (
-              <span key={field.label} className={styles.rowCardMetaField}>
-                <Caption1 className={styles.rowCardMetaLabel}>{field.label}:</Caption1>
-                <Caption1 className={styles.rowCardMetaText}>
-                  {typeof field.value === 'string'
-                    ? (field.value.trim() ? field.value : '—')
-                    : (field.value ?? '—')}
-                </Caption1>
-              </span>
+              <CardMetaRow
+                key={field.label}
+                label={field.label}
+                value={field.value}
+                valueBehavior={field.valueBehavior}
+              />
             ))}
           </div>
         ) : null}
-        {!props.badges && props.right ? <div className={styles.rowCardBadges}>{props.right}</div> : null}
-      {props.details}
+        {props.footer}
       </div>
     </Card>
+  );
+}
+
+export function RowCard(props: {
+  title: string;
+  subtitle?: string;
+  onClick?: () => void;
+  right?: ReactElement;
+  details?: ReactNode;
+  icon?: ReactElement;
+  accentKind?: PillKind;
+  accentValue?: string;
+  accentColor?: string;
+  badges?: ReactNode;
+  meta?: Array<{ label: string; value?: ReactNode; valueBehavior?: 'truncate' | 'clamp' | 'wrap' }>;
+}): ReactNode {
+  return (
+    <GalleryCard
+      title={props.title}
+      subtitle={props.subtitle}
+      onClick={props.onClick}
+      accentKind={props.accentKind}
+      accentValue={props.accentValue}
+      accentColor={props.accentColor}
+      pills={props.badges ?? props.right}
+      meta={props.meta}
+      footer={props.details}
+    />
   );
 }
 

@@ -1,22 +1,22 @@
 import { Button, Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab, TabList, Text, type ButtonProps, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, MoreHorizontal24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
 import { Fragment, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { formatDate, formatRoleLabel, truncate } from '../app/format';
+import { formatRoleLabel } from '../app/format';
 import { isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
 import type { ApprovalVm, ChecklistVm, DeficiencyVm, PlanDetailsDraftVm, PlanVm, TeamMemberVm } from '../app/types';
-import { DataState, GalleryListItem, Pill, ResponsiveButton, RowCard, SectionPanel, VirtualizedList } from '../components/ui';
+import { CardDate, DataState, GalleryCard, GalleryListItem, Pill, ResponsiveButton, SectionPanel, VirtualizedList } from '../components/ui';
 import type { PlanDetailsTab } from '../app/router';
 
 const MOBILE_TAB_QUERY = '(max-width: 700px)';
 const MOBILE_VISIBLE_TAB_COUNT = 3;
 const DESKTOP_CHECKLIST_ROW_HEIGHT = 128;
-const MOBILE_CHECKLIST_ROW_HEIGHT = 144;
-const DESKTOP_DEFICIENCY_ROW_HEIGHT = 134;
-const MOBILE_DEFICIENCY_ROW_HEIGHT = 160;
-const DESKTOP_APPROVAL_ROW_HEIGHT = 118;
-const MOBILE_APPROVAL_ROW_HEIGHT = 132;
-const DESKTOP_TEAM_ROW_HEIGHT = 98;
-const MOBILE_TEAM_ROW_HEIGHT = 82;
+const MOBILE_CHECKLIST_ROW_HEIGHT = 156;
+const DESKTOP_DEFICIENCY_ROW_HEIGHT = 188;
+const MOBILE_DEFICIENCY_ROW_HEIGHT = 236;
+const DESKTOP_APPROVAL_ROW_HEIGHT = 172;
+const MOBILE_APPROVAL_ROW_HEIGHT = 216;
+const DESKTOP_TEAM_ROW_HEIGHT = 142;
+const MOBILE_TEAM_ROW_HEIGHT = 158;
 
 const PLAN_LIFECYCLE_STAGES = [
   { code: PLAN_STAGE_DRAFT, label: 'Draft', icon: <Info24Regular /> },
@@ -664,29 +664,21 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                 row={(checklist) => {
                   return (
                   <GalleryListItem>
-                    <RowCard
-                      title={checklist.name}
-                      icon={<ClipboardTask24Regular />}
-                        accentKind="status"
-                        accentValue={checklist.statusLabel ?? ''}
-                      badges={(
+                    <GalleryCard
+                      title={`${checklist.checklistId ?? '—'} - ${checklist.name}`}
+                      accentKind="status"
+                      accentValue={checklist.statusLabel ?? ''}
+                      pills={(
                         <>
                           <Pill kind="status" value={checklist.statusLabel ?? 'No Status'} />
-                            <Pill kind="neutral" value={checklist.disciplineLabel ?? 'No Discipline'} icon={<Tag16Regular />} />
+                          <Pill kind="neutral" value={checklist.disciplineLabel ?? 'No Discipline'} icon={<Tag16Regular />} />
                         </>
                       )}
-                      meta={[
-                        { label: 'Autonumber', value: checklist.checklistId },
-                      ]}
-                      details={(
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS, marginTop: tokens.spacingVerticalS }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Progress</Caption1>
-                            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{`${checklist.questionCompletedCount}/${checklist.questionTotalCount} Questions`}</Caption1>
-                          </div>
-                          <ProgressBar value={checklist.questionTotalCount > 0 ? checklist.questionCompletedCount / checklist.questionTotalCount : 0} />
-                        </div>
-                      )}
+                      progress={{
+                        value: checklist.questionTotalCount > 0 ? checklist.questionCompletedCount / checklist.questionTotalCount : 0,
+                        label: `${checklist.questionCompletedCount}/${checklist.questionTotalCount} Questions`,
+                      }}
+                      footer={<CardDate value={checklist.createdOn} />}
                       onClick={() => props.onOpenChecklist(checklist)}
                     />
                   </GalleryListItem>
@@ -719,19 +711,20 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                 row={(deficiency) => {
                   return (
                   <GalleryListItem>
-                    <RowCard
-                      title={deficiency.name}
-                      subtitle={deficiency.questionName ?? deficiency.deficiencyId ?? 'Deficiency'}
-                        accentKind="status"
-                        accentValue={deficiency.statusLabel ?? ''}
-                      badges={(
-                          <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
+                    <GalleryCard
+                      title={`${deficiency.deficiencyId ?? '—'} - ${deficiency.name}`}
+                      accentKind="status"
+                      accentValue={deficiency.statusLabel ?? ''}
+                      pills={(
+                        <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
                       )}
                       meta={[
-                        { label: 'Question', value: deficiency.questionName ?? 'N/A' },
-                        { label: 'Category', value: deficiency.initialCategoryLabel ?? 'N/A' },
-                        { label: 'Comment', value: deficiency.generalComment ?? 'N/A' },
+                        { label: 'Initial Cat', value: deficiency.initialCategoryLabel },
+                        { label: 'Accepted Cat', value: deficiency.acceptedCategoryLabel },
+                        { label: 'General Comment', value: deficiency.generalComment, valueBehavior: 'clamp' },
+                        { label: 'Closing Comment', value: deficiency.closeoutComment, valueBehavior: 'clamp' },
                       ]}
+                      footer={<CardDate value={deficiency.createdOn} />}
                       onClick={() => props.onEditDeficiency(deficiency)}
                     />
                   </GalleryListItem>
@@ -759,21 +752,22 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                 row={(approval) => {
                   return (
                   <GalleryListItem>
-                    <RowCard
-                      title={formatRoleLabel(approval.roleLabel, 'Role not set')}
-                      icon={<TableMoveAbove24Regular />}
-                        accentKind="status"
-                        accentValue={approval.decisionLabel ?? ''}
-                      badges={(
+                    <GalleryCard
+                      title={approval.memberName?.trim() || 'Member unavailable'}
+                      accentKind="status"
+                      accentValue={approval.decisionLabel ?? ''}
+                      pills={(
                         <>
+                          <Pill kind="phase" value={approval.stageLabel ?? 'No Phase'} icon={<Tag16Regular />} />
                           <Pill kind="status" value={approval.decisionLabel ?? 'In Progress'} />
-                            <Pill kind="phase" value={approval.stageLabel ?? 'No Phase'} icon={<Tag16Regular />} />
                         </>
                       )}
                       meta={[
-                        { label: 'Approved On', value: formatDate(approval.approveOn) },
-                        { label: 'Comment', value: truncate(approval.comment ?? 'No comment') },
+                        { label: 'Role', value: formatRoleLabel(approval.roleLabel, 'Role not set') },
+                        { label: 'Approved', value: approval.approveOn },
+                        { label: 'Comment', value: approval.comment, valueBehavior: 'clamp' },
                       ]}
+                      footer={<CardDate value={approval.createdOn} />}
                     />
                   </GalleryListItem>
                 );
@@ -803,14 +797,18 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
               gap="4px"
               row={(member) => (
                 <GalleryListItem>
-                  <RowCard
+                  <GalleryCard
                     title={member.name ?? 'Unnamed member'}
-                    icon={<Person24Regular />}
                     accentKind="neutral"
                     accentValue={formatRoleLabel(member.roleLabel, 'Role not assigned')}
-                    badges={(
+                    pills={(
                       <Pill kind="neutral" value={formatRoleLabel(member.roleLabel, 'Role not assigned')} icon={<Tag16Regular />} />
                     )}
+                    meta={[
+                      { label: 'Email', value: member.email, valueBehavior: 'truncate' },
+                      { label: 'Phone Number', value: member.phone },
+                    ]}
+                    footer={member.createdOn ? <CardDate value={member.createdOn} /> : undefined}
                   />
                 </GalleryListItem>
               )}

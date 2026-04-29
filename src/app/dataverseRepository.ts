@@ -70,6 +70,8 @@ type SystemUserRow = {
   systemuserid?: string;
   fullname?: string;
   internalemailaddress?: string;
+  address1_telephone1?: string;
+  mobilephone?: string;
   isdisabled?: boolean;
   azureactivedirectoryobjectid?: string;
   crc07_role?: number;
@@ -281,15 +283,21 @@ export async function getPlans(): Promise<PlanVm[]> {
         'crc07_mocname',
         'crc07_projectname',
         'crc07_tarevisionname',
+        'createdon',
         '_createdby_value',
       ],
       top: 5000,
+      orderBy: ['createdon desc'],
     },
     {
       filter: '(statecode eq 0) or (statecode eq 1)',
       top: 5000,
+      orderBy: ['createdon desc'],
     },
-    undefined,
+    {
+      top: 5000,
+      orderBy: ['createdon desc'],
+    },
   ];
 
   for (const options of planQueryAttempts) {
@@ -500,6 +508,7 @@ export async function getPlans(): Promise<PlanVm[]> {
     return {
       id,
       createdById: normalizeGuid(plan._createdby_value),
+      createdOn: plan.createdon,
       planId: plan.crc07_planid ?? id,
       name: plan.crc07_name ?? 'Untitled Plan',
       event: plan.crc07_event,
@@ -731,6 +740,7 @@ export async function getPlanChecklists(planId: string): Promise<ChecklistVm[]> 
       'crc07_checklistname',
       'crc07_discipline',
       'crc07_status',
+      'createdon',
       '_crc07_relatedplan_value',
     ],
     top: 5000,
@@ -772,6 +782,7 @@ export async function getPlanChecklists(planId: string): Promise<ChecklistVm[]> 
       const id = normalizeGuid(item.crc07_pssr_checklistid);
       return {
         id,
+        createdOn: item.createdon,
         checklistId: item.crc07_checklistid,
         name: item.crc07_checklistname ?? 'Checklist',
         disciplineCode: item.crc07_discipline as number | undefined,
@@ -868,6 +879,7 @@ export async function getDeficienciesByPlan(planId: string): Promise<DeficiencyV
         'crc07_generalcomment',
         'crc07_closeoutcomment',
         'crc07_closedon',
+        'createdon',
         '_crc07_closed_by_value',
         '_crc07_relatedplan_value',
         '_crc07_relatedchecklist_value',
@@ -929,6 +941,7 @@ export async function getDeficienciesByPlan(planId: string): Promise<DeficiencyV
   return planRows
     .map((item) => ({
       id: normalizeGuid(item.crc07_pssr_deficiencyid),
+      createdOn: item.createdon,
       deficiencyId: item.crc07_deficiencyid,
       name: item.crc07_deficiencyname ?? 'Deficiency',
       initialCategoryCode: normalizeChoiceCode(item.crc07_initialcategory),
@@ -1017,6 +1030,7 @@ export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> 
         'crc07_statusname',
         'crc07_date',
         'crc07_comment',
+        'createdon',
         'modifiedon',
         '_crc07_member_value',
         '_crc07_relatedplan_value',
@@ -1032,6 +1046,7 @@ export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> 
         'crc07_status',
         'crc07_date',
         'crc07_comment',
+        'createdon',
         'modifiedon',
         '_crc07_member_value',
         '_crc07_relatedplan_value',
@@ -1063,8 +1078,22 @@ export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> 
   }
 
   const targetPlanId = normalizeGuid(planId);
-  return rows
-    .filter((item) => normalizeGuid(item._crc07_relatedplan_value) === targetPlanId)
+  const planRows = rows.filter((item) => normalizeGuid(item._crc07_relatedplan_value) === targetPlanId);
+  const memberIds = Array.from(new Set(planRows.map((item) => normalizeGuid(item._crc07_member_value)).filter((value) => Boolean(value))));
+  const memberDirectory = memberIds.length > 0
+    ? await withReadTimeout(
+      dataverseClient.retrieveMultipleRecordsAsync<SystemUserRow>('systemusers', {
+        select: ['systemuserid', 'fullname'],
+        filter: memberIds.map((id) => `systemuserid eq ${id}`).join(' or '),
+        top: memberIds.length,
+      } as IGetAllOptions),
+      'Timed out loading approval member names from Dataverse.',
+    )
+    : ({ data: [] } as OperationResultLike<SystemUserRow[]>);
+  const memberRows = getResultData(memberDirectory as OperationResultLike<SystemUserRow[]>, 'Loading approval member names from Dataverse') ?? [];
+  const memberById = new Map(memberRows.map((item) => [normalizeGuid(item.systemuserid), item.fullname?.trim() || '']));
+
+  return planRows
     .map((item) => {
       const memberId = normalizeGuid(item._crc07_member_value);
       const stageCode = normalizeChoiceCode(item.crc07_pssrstage);
@@ -1074,8 +1103,10 @@ export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> 
 
       return {
         id: normalizeGuid(item.crc07_pssr_approvalid),
+        createdOn: item.createdon,
         planId: normalizeGuid(item._crc07_relatedplan_value),
         memberId,
+        memberName: memberById.get(memberId),
         stageCode,
         stageLabel: item.crc07_pssrstagename ?? lookupName(Crc07_pssr_approvalscrc07_pssrstage, stageCode),
         roleCode,
@@ -1167,7 +1198,7 @@ export async function createTeamMember(payload: {
 export async function getTeamByPlan(planId: string): Promise<TeamMemberVm[]> {
   const rows = await readDataverseRows(
     Crc07_pssr_team_membersService.getAll({
-    select: ['crc07_pssr_team_memberid', 'crc07_name', 'crc07_roles', '_crc07_member_value', '_crc07_relatedplan_value'],
+    select: ['crc07_pssr_team_memberid', 'crc07_name', 'crc07_roles', 'createdon', '_crc07_member_value', '_crc07_relatedplan_value'],
     top: 5000,
     orderBy: ['modifiedon desc'],
     }),
@@ -1176,16 +1207,41 @@ export async function getTeamByPlan(planId: string): Promise<TeamMemberVm[]> {
   );
 
   const targetPlanId = normalizeGuid(planId);
-  return rows
+  const teamRows = rows
     .filter((item) => normalizeGuid(item._crc07_relatedplan_value) === targetPlanId)
     .map((item) => ({
       id: normalizeGuid(item.crc07_pssr_team_memberid),
+      createdOn: item.createdon,
       memberId: normalizeGuid(item._crc07_member_value),
       name: item.crc07_name,
       roleCode: item.crc07_roles as number | undefined,
       roleLabel: lookupName(Crc07_pssr_team_memberscrc07_roles, item.crc07_roles as number | undefined),
       planId: normalizeGuid(item._crc07_relatedplan_value),
     }));
+
+  const memberIds = Array.from(new Set(teamRows.map((item) => normalizeGuid(item.memberId)).filter((value) => Boolean(value))));
+  const memberDirectory = memberIds.length > 0
+    ? await withReadTimeout(
+      dataverseClient.retrieveMultipleRecordsAsync<SystemUserRow>('systemusers', {
+        select: ['systemuserid', 'internalemailaddress', 'address1_telephone1', 'mobilephone'],
+        filter: memberIds.map((id) => `systemuserid eq ${id}`).join(' or '),
+        top: memberIds.length,
+      } as IGetAllOptions),
+      'Timed out loading team member contact details from Dataverse.',
+    )
+    : ({ data: [] } as OperationResultLike<SystemUserRow[]>);
+
+  const memberRows = getResultData(memberDirectory as OperationResultLike<SystemUserRow[]>, 'Loading team member contact details from Dataverse') ?? [];
+  const memberById = new Map(memberRows.map((item) => [normalizeGuid(item.systemuserid), item]));
+
+  return teamRows.map((item) => {
+    const member = memberById.get(normalizeGuid(item.memberId));
+    return {
+      ...item,
+      email: member?.internalemailaddress,
+      phone: member?.mobilephone ?? member?.address1_telephone1,
+    };
+  });
 }
 
 export async function getTemplateChecklists(): Promise<TemplateChecklistVm[]> {

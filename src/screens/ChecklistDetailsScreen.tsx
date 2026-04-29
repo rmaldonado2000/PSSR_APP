@@ -2,7 +2,7 @@ import { Button, Field, Input, MessageBar, ProgressBar, Tab, TabList, Text, make
 import { Add24Regular, Checkmark24Regular, ClipboardTask24Regular, DismissCircle24Regular, Info24Regular, MoreHorizontal24Regular, Save24Regular, Warning24Filled } from '@fluentui/react-icons';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import type { ChecklistVm, DeficiencyVm, PlanVm, QuestionVm } from '../app/types';
-import { DataState, GalleryListItem, Pill, ResponsiveButton, RowCard, SectionPanel, VirtualizedList } from '../components/ui';
+import { DataState, GalleryListItem, Pill, ResponsiveButton, GalleryCard, CardDate, SectionPanel, VirtualizedList } from '../components/ui';
 import type { ChecklistDetailsTab } from '../app/router';
 
 const MOBILE_TAB_QUERY = '(max-width: 700px)';
@@ -21,6 +21,8 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalM,
     height: '100%',
     minHeight: 0,
+    minWidth: 0,
+    overflowX: 'hidden',
   },
   summarySection: {
     flexShrink: 0,
@@ -139,6 +141,8 @@ const useStyles = makeStyles({
     gridTemplateRows: 'auto auto minmax(0, 1fr)',
     minHeight: 0,
     height: '100%',
+    minWidth: 0,
+    overflowX: 'hidden',
   },
   questionRow: {
     borderRadius: tokens.borderRadiusLarge,
@@ -149,9 +153,16 @@ const useStyles = makeStyles({
     gridTemplateColumns: 'max-content minmax(0, 1fr) auto',
     gap: tokens.spacingHorizontalS,
     alignItems: 'center',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box',
     '@media (max-width: 900px)': {
       gridTemplateColumns: 'max-content minmax(0, 1fr)',
       gap: tokens.spacingVerticalM,
+    },
+    '@media (max-width: 700px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      gap: tokens.spacingVerticalS,
     },
   },
   questionRowSwipeable: {
@@ -175,6 +186,8 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
     gap: tokens.spacingHorizontalS,
     alignItems: 'center',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
   },
   requiredIndicator: {
     color: tokens.colorPaletteRedForeground1,
@@ -184,11 +197,13 @@ const useStyles = makeStyles({
     lineHeight: tokens.lineHeightBase300,
     whiteSpace: 'normal',
     wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
   },
   questionContent: {
     display: 'grid',
     gap: tokens.spacingVerticalXS,
     minWidth: 0,
+    maxWidth: '100%',
   },
   deficiencyHint: {
     display: 'flex',
@@ -217,6 +232,8 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
     gap: tokens.spacingHorizontalS,
     justifyContent: 'flex-end',
+    minWidth: 0,
+    maxWidth: '100%',
     '@media (max-width: 900px)': {
       gridColumn: '1 / -1',
       display: 'grid',
@@ -224,6 +241,9 @@ const useStyles = makeStyles({
       justifyContent: 'stretch',
       width: '100%',
       gap: tokens.spacingHorizontalXS,
+    },
+    '@media (max-width: 700px)': {
+      gridTemplateColumns: '1fr',
     },
   },
   answerButton: {
@@ -715,27 +735,28 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
               >
                 <VirtualizedList
                   items={checklistDeficiencies}
-                  rowHeight={122}
+                  rowHeight={188}
                   fillHeight
                   layout="stack"
                   gap="4px"
                   row={(deficiency) => {
                     return (
                       <GalleryListItem>
-                        <RowCard
+                        <GalleryCard
                           key={deficiency.id}
-                          title={deficiency.name}
-                          subtitle={deficiency.questionName ?? deficiency.deficiencyId ?? 'Deficiency'}
+                          title={`${deficiency.deficiencyId ?? '—'} - ${deficiency.name}`}
                           accentKind="status"
                           accentValue={deficiency.statusLabel ?? ''}
-                          badges={[
-                            <Pill key={`${deficiency.id}-status`} kind="status" value={deficiency.statusLabel ?? 'No Status'} />,
-                          ]}
+                          pills={
+                            <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
+                          }
                           meta={[
-                            { label: 'Question', value: deficiency.questionName ?? 'N/A' },
-                            { label: 'Category', value: deficiency.initialCategoryLabel ?? 'N/A' },
-                            { label: 'Comment', value: deficiency.generalComment ?? 'N/A' },
+                            { label: 'Initial Cat', value: deficiency.initialCategoryLabel },
+                            { label: 'Accepted Cat', value: deficiency.acceptedCategoryLabel },
+                            { label: 'General Comment', value: deficiency.generalComment, valueBehavior: 'clamp' },
+                            { label: 'Closing Comment', value: deficiency.closeoutComment, valueBehavior: 'clamp' },
                           ]}
+                          footer={<CardDate value={deficiency.createdOn} />}
                         />
                       </GalleryListItem>
                     );

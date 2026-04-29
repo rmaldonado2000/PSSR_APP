@@ -11,6 +11,7 @@ export interface CurrentUserProfileVm {
 export interface PlanVm {
   id: string;
   createdById?: string;
+  createdOn?: string;
   planId: string;
   name: string;
   event?: string;
@@ -40,6 +41,7 @@ export interface PlanDetailsDraftVm {
 
 export interface ChecklistVm {
   id: string;
+  createdOn?: string;
   checklistId?: string;
   name: string;
   disciplineCode?: number;
@@ -64,6 +66,7 @@ export interface QuestionVm {
 
 export interface DeficiencyVm {
   id: string;
+  createdOn?: string;
   deficiencyId?: string;
   planId?: string;
   checklistId?: string;
@@ -85,8 +88,10 @@ export interface DeficiencyVm {
 
 export interface ApprovalVm {
   id: string;
+  createdOn?: string;
   planId?: string;
   memberId?: string;
+  memberName?: string;
   stageCode?: number;
   stageLabel?: string;
   roleCode?: number;
@@ -100,8 +105,11 @@ export interface ApprovalVm {
 
 export interface TeamMemberVm {
   id: string;
+  createdOn?: string;
   memberId?: string;
   name?: string;
+  email?: string;
+  phone?: string;
   roleCode?: number;
   roleLabel?: string;
   planId?: string;
