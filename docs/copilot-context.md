@@ -51,6 +51,9 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 ## UI / UX Standards
 
 - Fluent UI is used for controls and layout
+- Shared action-style buttons are centralized through `ResponsiveButton` in `src/components/ui.tsx`; narrow layouts render icon-only buttons with accessible labels, while wider layouts show icon plus text.
+- Shared centered modal dialogs are centralized through `AppDialog` in `src/components/ui.tsx`; dialogs should use the Fluent portal/modal surface with a visible dimmed backdrop, a top-right close button, scrollable content, and a non-wrapping footer that intentionally stacks actions on narrow widths.
+- Searchable single-select inputs in dialogs are centralized through `SearchableCombobox` in `src/components/ui.tsx`; multi-character case-insensitive filtering is expected for lookup-style controls.
 - Gallery/list cards follow the shared anatomy documented in `docs/ui-gallery-card-anatomy.md`
 - Pills/badges follow the token and color standard documented in `docs/ui-pill-standard.md`
 - Responsive design is required for mobile and desktop
@@ -64,6 +67,9 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 
 - `Pill`: Used for status, phase, and neutral pills with standardized visual rules
 - `CardAccent`: Used for consistent card accent coloring
+- `ResponsiveButton`: Shared action button wrapper for header and footer actions
+- `AppDialog`: Shared dialog scaffold for modal editors and confirmations
+- `SearchableCombobox`: Shared single-select combobox with multi-character filtering
 - `GalleryCard`, `RowCard`, `SectionPanel`, `VirtualizedList`, `DataState`, and related reusable UI components
 - Shared components are imported through `components/ui.tsx`
 

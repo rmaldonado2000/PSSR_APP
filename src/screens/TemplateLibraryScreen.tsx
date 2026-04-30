@@ -2,11 +2,8 @@ import {
   Button,
   Caption1,
   Card,
-  Divider,
-  Dropdown,
   Field,
   Input,
-  Option,
   Textarea,
   Text,
   makeStyles,
@@ -16,7 +13,7 @@ import { Add24Regular, Copy24Regular, Delete24Regular, Edit24Regular, MoreHorizo
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { truncate } from '../app/format';
 import type { TemplateChecklistVm, TemplateQuestionVm } from '../app/types';
-import { DataState, Pill, ResponsiveButton, RowCard, SectionPanel } from '../components/ui';
+import { AppDialog, DataState, Pill, ResponsiveButton, RowCard, SearchableCombobox, SectionPanel } from '../components/ui';
 
 const useStyles = makeStyles({
   splitLayout: {
@@ -118,36 +115,6 @@ const useStyles = makeStyles({
   inlineEditor: {
     display: 'grid',
     gap: tokens.spacingVerticalM,
-    padding: tokens.spacingHorizontalM,
-    borderRadius: tokens.borderRadiusLarge,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  floatingEditorHost: {
-    position: 'fixed',
-    inset: 0,
-    display: 'grid',
-    placeItems: 'center',
-    pointerEvents: 'none',
-    padding: tokens.spacingHorizontalXL,
-    zIndex: 30,
-    '@media (max-width: 700px)': {
-      padding: tokens.spacingHorizontalM,
-      alignItems: 'start',
-      overflowY: 'auto',
-    },
-  },
-  floatingEditorCard: {
-    width: 'min(720px, calc(100vw - 32px))',
-    maxHeight: '80vh',
-    overflowY: 'auto',
-    boxShadow: tokens.shadow64,
-    pointerEvents: 'auto',
-    '@media (max-width: 700px)': {
-      width: '100%',
-      marginTop: tokens.spacingVerticalXL,
-      maxHeight: 'none',
-    },
   },
   questionTitle: {
     fontWeight: tokens.fontWeightSemibold,
@@ -383,117 +350,97 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
           </div>
 
           {props.isTemplateChecklistEditorOpen && (
-            <div className={styles.floatingEditorHost}>
-              <Card appearance="filled-alternative" className={styles.floatingEditorCard}>
-                <div className={styles.inlineEditor}>
-                  <Text weight="semibold">{props.templateChecklistDraft.id ? 'Edit Checklist' : 'New Checklist'}</Text>
-                  <Field label="Name" required>
-                    <Input
-                      value={props.templateChecklistDraft.name}
-                      onChange={(_, data) => props.onTemplateChecklistDraftChange({ name: data.value })}
-                    />
-                  </Field>
-                  <Field label="Discipline">
-                    <Dropdown
-                      inlinePopup
-                      value={props.templateDisciplineOptions.find((item) => item.key === props.templateChecklistDraft.disciplineCode)?.label}
-                      selectedOptions={props.templateChecklistDraft.disciplineCode ? [String(props.templateChecklistDraft.disciplineCode)] : []}
-                      onOptionSelect={(_, data) => {
-                        if (data.optionValue) {
-                          props.onTemplateChecklistDraftChange({ disciplineCode: Number(data.optionValue) });
-                        }
-                      }}
-                    >
-                      {props.templateDisciplineOptions.map((option) => (
-                        <Option key={option.key} value={String(option.key)}>{option.label}</Option>
-                      ))}
-                    </Dropdown>
-                  </Field>
-                  <Field label="Site">
-                    <Dropdown
-                      inlinePopup
-                      value={props.templateSiteOptions.find((item) => item.key === props.templateChecklistDraft.siteCode)?.label}
-                      selectedOptions={props.templateChecklistDraft.siteCode ? [String(props.templateChecklistDraft.siteCode)] : []}
-                      onOptionSelect={(_, data) => {
-                        if (data.optionValue) {
-                          props.onTemplateChecklistDraftChange({ siteCode: Number(data.optionValue) });
-                        }
-                      }}
-                    >
-                      {props.templateSiteOptions.map((option) => (
-                        <Option key={option.key} value={String(option.key)}>{option.label}</Option>
-                      ))}
-                    </Dropdown>
-                  </Field>
-                  <Divider />
-                  <div className={styles.actionRow}>
-                    <ResponsiveButton appearance="primary" icon={<Save24Regular />} label="Save" onClick={props.onSaveTemplateChecklist} />
-                  </div>
-                </div>
-              </Card>
-            </div>
+            <AppDialog
+              open={props.isTemplateChecklistEditorOpen}
+              title={props.templateChecklistDraft.id ? 'Edit Checklist' : 'New Checklist'}
+              onClose={props.onCloseTemplateChecklistEditor}
+              actions={<ResponsiveButton appearance="primary" icon={<Save24Regular />} label="Save" onClick={props.onSaveTemplateChecklist} />}
+            >
+              <div className={styles.inlineEditor}>
+                <Field label="Name" required>
+                  <Input
+                    value={props.templateChecklistDraft.name}
+                    onChange={(_, data) => props.onTemplateChecklistDraftChange({ name: data.value })}
+                  />
+                </Field>
+                <Field label="Discipline">
+                  <SearchableCombobox
+                    options={props.templateDisciplineOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+                    selectedValue={props.templateChecklistDraft.disciplineCode !== undefined ? String(props.templateChecklistDraft.disciplineCode) : undefined}
+                    onSelect={(value) => {
+                      if (value) {
+                        props.onTemplateChecklistDraftChange({ disciplineCode: Number(value) });
+                      }
+                    }}
+                  />
+                </Field>
+                <Field label="Site">
+                  <SearchableCombobox
+                    options={props.templateSiteOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+                    selectedValue={props.templateChecklistDraft.siteCode !== undefined ? String(props.templateChecklistDraft.siteCode) : undefined}
+                    onSelect={(value) => {
+                      if (value) {
+                        props.onTemplateChecklistDraftChange({ siteCode: Number(value) });
+                      }
+                    }}
+                  />
+                </Field>
+              </div>
+            </AppDialog>
           )}
 
           {props.isTemplateQuestionEditorOpen && (
-            <div className={styles.floatingEditorHost}>
-              <Card appearance="filled-alternative" className={styles.floatingEditorCard}>
-                <div className={styles.inlineEditor}>
-                  <Text weight="semibold">{props.templateQuestionDraft.id ? 'Edit Question' : 'New Question'}</Text>
-                  <Field label="Question" required>
-                    <Textarea
-                      value={props.templateQuestionDraft.questionText}
-                      onChange={(_, data) => props.onTemplateQuestionDraftChange({ questionText: data.value })}
-                    />
-                  </Field>
-                  <Field label="Sequence Number">
-                    <Input
-                      type="number"
-                      min={1}
-                      value={String(props.templateQuestionDraft.sequenceOrder)}
-                      onChange={(_, data) => {
-                        const nextValue = Number(data.value);
-                        props.onTemplateQuestionDraftChange({
-                          sequenceOrder: Number.isFinite(nextValue) && nextValue > 0 ? nextValue : 1,
-                        });
-                      }}
-                    />
-                  </Field>
-                  <Field label="Mandatory">
-                    <Dropdown
-                      inlinePopup
-                      value={props.templateQuestionDraft.isMandatory ? 'Required' : 'Optional'}
-                      selectedOptions={[props.templateQuestionDraft.isMandatory ? 'required' : 'optional']}
-                      onOptionSelect={(_, data) => {
-                        props.onTemplateQuestionDraftChange({ isMandatory: data.optionValue !== 'optional' });
-                      }}
-                    >
-                      <Option value="required">Required</Option>
-                      <Option value="optional">Optional</Option>
-                    </Dropdown>
-                  </Field>
-                  <Field label="Site">
-                    <Dropdown
-                      inlinePopup
-                      value={props.templateQuestionSiteOptions.find((item) => item.key === props.templateQuestionDraft.siteCode)?.label}
-                      selectedOptions={props.templateQuestionDraft.siteCode ? [String(props.templateQuestionDraft.siteCode)] : []}
-                      onOptionSelect={(_, data) => {
-                        if (data.optionValue) {
-                          props.onTemplateQuestionDraftChange({ siteCode: Number(data.optionValue) });
-                        }
-                      }}
-                    >
-                      {props.templateQuestionSiteOptions.map((option) => (
-                        <Option key={option.key} value={String(option.key)}>{option.label}</Option>
-                      ))}
-                    </Dropdown>
-                  </Field>
-                  <Divider />
-                  <div className={styles.actionRow}>
-                    <ResponsiveButton appearance="primary" icon={<Save24Regular />} label="Save" onClick={props.onSaveTemplateQuestion} />
-                  </div>
-                </div>
-              </Card>
-            </div>
+            <AppDialog
+              open={props.isTemplateQuestionEditorOpen}
+              title={props.templateQuestionDraft.id ? 'Edit Question' : 'New Question'}
+              onClose={props.onCloseTemplateQuestionEditor}
+              actions={<ResponsiveButton appearance="primary" icon={<Save24Regular />} label="Save" onClick={props.onSaveTemplateQuestion} />}
+            >
+              <div className={styles.inlineEditor}>
+                <Field label="Question" required>
+                  <Textarea
+                    value={props.templateQuestionDraft.questionText}
+                    onChange={(_, data) => props.onTemplateQuestionDraftChange({ questionText: data.value })}
+                  />
+                </Field>
+                <Field label="Sequence Number">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={String(props.templateQuestionDraft.sequenceOrder)}
+                    onChange={(_, data) => {
+                      const nextValue = Number(data.value);
+                      props.onTemplateQuestionDraftChange({
+                        sequenceOrder: Number.isFinite(nextValue) && nextValue > 0 ? nextValue : 1,
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label="Mandatory">
+                  <SearchableCombobox
+                    options={[
+                      { value: 'required', label: 'Required' },
+                      { value: 'optional', label: 'Optional' },
+                    ]}
+                    selectedValue={props.templateQuestionDraft.isMandatory ? 'required' : 'optional'}
+                    onSelect={(value) => {
+                      props.onTemplateQuestionDraftChange({ isMandatory: value !== 'optional' });
+                    }}
+                  />
+                </Field>
+                <Field label="Site">
+                  <SearchableCombobox
+                    options={props.templateQuestionSiteOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+                    selectedValue={props.templateQuestionDraft.siteCode !== undefined ? String(props.templateQuestionDraft.siteCode) : undefined}
+                    onSelect={(value) => {
+                      if (value) {
+                        props.onTemplateQuestionDraftChange({ siteCode: Number(value) });
+                      }
+                    }}
+                  />
+                </Field>
+              </div>
+            </AppDialog>
           )}
         </div>
       </DataState>

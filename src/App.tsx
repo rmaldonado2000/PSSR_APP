@@ -2,18 +2,10 @@ import {
   Button,
   Caption1,
   Card,
-  Combobox,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  Divider,
-  Dropdown,
   Field,
   FluentProvider,
   Input,
   Link,
-  Option,
   Spinner,
   Text,
   Textarea,
@@ -24,7 +16,7 @@ import {
   webLightTheme,
 } from '@fluentui/react-components';
 import { getContext } from '@microsoft/power-apps/app';
-import { Add24Regular, ArrowCircleRight16Regular, ArrowLeft16Regular, Briefcase16Regular, Building16Regular, CheckmarkCircle16Regular, ChevronDown16Regular, ChevronRight12Regular, ClipboardTask16Regular, Delete24Regular, DocumentMultiple24Regular, Home24Regular, Save24Regular, Wrench16Regular } from '@fluentui/react-icons';
+import { Add24Regular, ArrowCircleRight16Regular, ArrowLeft16Regular, Briefcase16Regular, Building16Regular, CheckmarkCircle16Regular, ChevronDown16Regular, ChevronRight12Regular, ClipboardTask16Regular, Delete24Regular, DocumentMultiple24Regular, Dismiss24Regular, Home24Regular, Save24Regular, Wrench16Regular } from '@fluentui/react-icons';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createApproval,
@@ -110,7 +102,7 @@ import type {
   TemplateChecklistVm,
   TemplateQuestionVm,
 } from './app/types';
-import { ModalHeader, Pill, ResponsiveButton } from './components/ui';
+import { AppDialog, Pill, ResponsiveButton, SearchableCombobox } from './components/ui';
 import './index.css';
 
 const PlansScreen = lazy(() => import('./screens/PlansScreen'));
@@ -624,57 +616,20 @@ const useStyles = makeStyles({
     padding: tokens.spacingHorizontalM,
     borderRadius: tokens.borderRadiusLarge,
   },
+  dialogSurfaceWide: {
+    width: 'min(760px, calc(100vw - 32px))',
+  },
+  dialogSurfaceCompact: {
+    width: 'min(520px, calc(100vw - 32px))',
+  },
   templateQuestionTitle: {
     lineHeight: tokens.lineHeightBase300,
     whiteSpace: 'normal',
     wordBreak: 'break-word',
   },
-  floatingEditorHost: {
-    position: 'fixed',
-    inset: 0,
-    display: 'grid',
-    placeItems: 'center',
-    pointerEvents: 'none',
-    padding: tokens.spacingHorizontalXL,
-    zIndex: 30,
-    '@media (max-width: 700px)': {
-      padding: tokens.spacingHorizontalM,
-      alignItems: 'start',
-      overflowY: 'auto',
-    },
-  },
-  floatingEditorCard: {
-    width: 'min(760px, calc(100vw - 32px))',
-    maxHeight: 'min(78vh, 760px)',
-    overflow: 'hidden',
-    boxShadow: tokens.shadow64,
-    pointerEvents: 'auto',
-    '@media (max-width: 700px)': {
-      width: '100%',
-      marginTop: tokens.spacingVerticalXL,
-      maxHeight: 'none',
-    },
-  },
-  unsavedResponsesPopout: {
-    width: 'min(520px, calc(100vw - 32px))',
-    pointerEvents: 'auto',
-    boxShadow: tokens.shadow64,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    '@media (max-width: 700px)': {
-      width: '100%',
-      marginTop: tokens.spacingVerticalXL,
-    },
-  },
   unsavedResponsesBody: {
     display: 'grid',
     gap: tokens.spacingVerticalM,
-    padding: tokens.spacingHorizontalL,
-  },
-  unsavedResponsesActions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: tokens.spacingHorizontalS,
-    flexWrap: 'wrap',
   },
   helperText: {
     color: tokens.colorNeutralForeground3,
@@ -3166,470 +3121,395 @@ export default function App() {
       </div>
 
       {isPendingQuestionDialogOpen && (
-        <div className={styles.floatingEditorHost}>
-          <Card appearance="filled-alternative" className={styles.unsavedResponsesPopout}>
-            <div className={styles.unsavedResponsesBody}>
-              <ModalHeader title="Unsaved Responses" onClose={onStayOnChecklist} />
-              <Text>
-                You have {pendingQuestionResponseCount} unsaved {pendingQuestionResponseCount === 1 ? 'response' : 'responses'} on this checklist.
-                Save before leaving, or discard the staged changes.
-              </Text>
-              <Divider />
-              <div className={styles.unsavedResponsesActions}>
-                <ResponsiveButton appearance="subtle" icon={<Delete24Regular />} label="Discard Changes" onClick={() => { void onDiscardQuestionChangesAndContinue(); }} />
-                <ResponsiveButton appearance="primary" icon={<Save24Regular />} label={isSavingQuestionResponses ? 'Saving...' : 'Save and Close'} disabled={isSavingQuestionResponses} onClick={() => { void onSaveQuestionChangesAndContinue(); }} />
-              </div>
-            </div>
-          </Card>
-        </div>
+        <AppDialog
+          open={isPendingQuestionDialogOpen}
+          title="Unsaved Responses"
+          onClose={onStayOnChecklist}
+          surfaceClassName={styles.dialogSurfaceCompact}
+          actions={[
+            <ResponsiveButton key="discard" appearance="subtle" icon={<Delete24Regular />} label="Discard Changes" onClick={() => { void onDiscardQuestionChangesAndContinue(); }} />,
+            <ResponsiveButton key="save" appearance="primary" icon={<Save24Regular />} label={isSavingQuestionResponses ? 'Saving...' : 'Save and Close'} disabled={isSavingQuestionResponses} onClick={() => { void onSaveQuestionChangesAndContinue(); }} />,
+          ]}
+        >
+          <div className={styles.unsavedResponsesBody}>
+            <Text>
+              You have {pendingQuestionResponseCount} unsaved {pendingQuestionResponseCount === 1 ? 'response' : 'responses'} on this checklist.
+              Save before leaving, or discard the staged changes.
+            </Text>
+          </div>
+        </AppDialog>
       )}
 
       {isDeficiencyOpen && (
-        <div className={styles.floatingEditorHost}>
-          <Card appearance="filled-alternative" className={styles.floatingEditorCard}>
-            <div className={styles.deficiencyEditorLayout}>
-              <ModalHeader
-                title={deficiencyPopoutMode === 'list' ? 'Question Deficiencies' : deficiencyDraft.id ? 'Edit Deficiency' : 'Create Deficiency'}
-                onClose={onCloseDeficiencyPopout}
-              />
+        <AppDialog
+          open={isDeficiencyOpen}
+          title={deficiencyPopoutMode === 'list' ? 'Question Deficiencies' : deficiencyDraft.id ? 'Edit Deficiency' : 'Create Deficiency'}
+          onClose={onCloseDeficiencyPopout}
+          surfaceClassName={styles.dialogSurfaceWide}
+          actions={deficiencyPopoutMode === 'list'
+            ? <ResponsiveButton appearance="primary" icon={<Add24Regular />} label="Add Another Deficiency" onClick={onAddAnotherQuestionDeficiency} />
+            : [
+              associatedQuestionDeficiencies.length > 1 && deficiencyDraft.id
+                ? <ResponsiveButton key="back" appearance="subtle" icon={<ArrowCircleRight16Regular />} label="Back to List" onClick={() => setDeficiencyPopoutMode('list')} />
+                : null,
+              deficiencyQuestionId
+                ? <ResponsiveButton key="add" appearance="secondary" icon={<Add24Regular />} label="Add Another Deficiency" onClick={onAddAnotherQuestionDeficiency} />
+                : null,
+              deficiencyDraft.id && activeDeficiencyRecord?.statusCode !== 507650002
+                ? <ResponsiveButton key="close" appearance="secondary" icon={<CheckmarkCircle16Regular />} label="Close" disabled={!isActiveDeficiencyEditable} title={isActiveDeficiencyEditable ? undefined : 'This deficiency is read-only in the current lifecycle phase.'} onClick={onOpenDeficiencyCloseDialog} />
+                : null,
+              <ResponsiveButton key="save" appearance="primary" icon={<Save24Regular />} label={t('save')} disabled={!canSaveDeficiency} onClick={() => { void onSaveDeficiency(); }} />,
+            ].filter(Boolean)}
+        >
+          <div className={styles.deficiencyEditorLayout}>
+            {deficiencyPopoutMode === 'list' ? (
+              <>
+                <Text>{activeDeficiencyQuestion?.text ?? 'This question has associated deficiencies.'}</Text>
 
-              {deficiencyPopoutMode === 'list' ? (
-                <>
-                  <Text>{activeDeficiencyQuestion?.text ?? 'This question has associated deficiencies.'}</Text>
-
-                  <div className={styles.deficiencyList}>
-                    {associatedQuestionDeficiencies.map((deficiency) => {
-                      return (
-                        <Card
-                          key={deficiency.id}
-                          appearance="filled-alternative"
-                          className={styles.deficiencyListCard}
-                          onClick={() => onEditQuestionDeficiency(deficiency)}
-                        >
-                          <div className={styles.deficiencyListHeader}>
-                            <Text weight="semibold">{deficiency.name || 'Untitled deficiency'}</Text>
-                            <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
-                          </div>
-                          <div className={styles.deficiencyListMeta}>
-                            <Pill kind="neutral" value={`Init ${deficiency.initialCategoryLabel ?? 'N/A'}`} />
-                            <Pill kind="neutral" value={`Acc ${deficiency.acceptedCategoryLabel ?? 'N/A'}`} />
-                          </div>
-                          <Caption1>{deficiency.generalComment?.trim() || 'No general comment'}</Caption1>
-                        </Card>
-                      );
-                    })}
-                  </div>
-
-                  <Divider />
-
-                  <div className={styles.deficiencyEditorActions}>
-                    <ResponsiveButton appearance="primary" icon={<Add24Regular />} label="Add Another Deficiency" onClick={onAddAnotherQuestionDeficiency} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={styles.modalFields}>
-                    <Field label="Deficiency Description">
-                      <Input
-                        value={deficiencyDraft.name}
-                        onChange={(_, data) => setDeficiencyDraft((current) => ({ ...current, name: data.value }))}
-                        disabled={!isDeficiencyDraftEditable}
-                      />
-                    </Field>
-
-                    <div className={styles.deficiencyCategoryRow}>
-                      <Field label="Initial Category">
-                        <Combobox
-                          inlinePopup
-                          placeholder="Select initial category"
-                          value={deficiencyCategoryOptions.find((item) => item.key === deficiencyDraft.initialCategoryCode)?.label ?? ''}
-                          selectedOptions={deficiencyDraft.initialCategoryCode ? [String(deficiencyDraft.initialCategoryCode)] : []}
-                          onOptionSelect={(_, data) => {
-                            if (data.optionValue) {
-                              setDeficiencyDraft((current) => ({ ...current, initialCategoryCode: Number(data.optionValue) }));
-                            }
-                          }}
-                          disabled={!isDeficiencyDraftEditable}
-                        >
-                          {deficiencyCategoryOptions.map((option) => (
-                            <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
-                          ))}
-                        </Combobox>
-                      </Field>
-
-                      <Field label="Accepted Category">
-                        <Combobox
-                          inlinePopup
-                          placeholder={isAcceptedCategoryEnabled ? 'Select accepted category' : 'Available when status is In Progress'}
-                          value={deficiencyCategoryOptions.find((item) => item.key === deficiencyDraft.acceptedCategoryCode)?.label ?? ''}
-                          selectedOptions={deficiencyDraft.acceptedCategoryCode ? [String(deficiencyDraft.acceptedCategoryCode)] : []}
-                          onOptionSelect={(_, data) => {
-                            if (data.optionValue) {
-                              setDeficiencyDraft((current) => ({ ...current, acceptedCategoryCode: Number(data.optionValue) }));
-                            }
-                          }}
-                          disabled={!isDeficiencyDraftEditable || !isAcceptedCategoryEnabled}
-                        >
-                          {deficiencyCategoryOptions.map((option) => (
-                            <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
-                          ))}
-                        </Combobox>
-                      </Field>
-                    </div>
-
-                    <Field label="Status">
-                      <Combobox
-                        inlinePopup
-                        placeholder="Select status"
-                        value={deficiencyStatusOptions.find((item) => item.key === deficiencyDraft.statusCode)?.label ?? ''}
-                        selectedOptions={deficiencyDraft.statusCode ? [String(deficiencyDraft.statusCode)] : []}
-                        onOptionSelect={(_, data) => {
-                          if (data.optionValue) {
-                            const nextStatusCode = Number(data.optionValue);
-                            setDeficiencyDraft((current) => ({
-                              ...current,
-                              statusCode: nextStatusCode,
-                              acceptedCategoryCode: nextStatusCode === DEFICIENCY_STATUS_IN_PROGRESS
-                                ? current.acceptedCategoryCode
-                                : undefined,
-                            }));
-                          }
-                        }}
-                        disabled={!isDeficiencyDraftEditable}
+                <div className={styles.deficiencyList}>
+                  {associatedQuestionDeficiencies.map((deficiency) => {
+                    return (
+                      <Card
+                        key={deficiency.id}
+                        appearance="filled-alternative"
+                        className={styles.deficiencyListCard}
+                        onClick={() => onEditQuestionDeficiency(deficiency)}
                       >
-                        {deficiencyStatusOptions.filter((option) => option.key !== 507650002).map((option) => (
-                          <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
-                        ))}
-                      </Combobox>
-                    </Field>
-
-                    <Field label="Assigned To (UI only until Dataverse lookup is added)">
-                      <Input placeholder="Future Dataverse lookup" disabled />
-                    </Field>
-
-                    <Field label="General Comment (open/in-progress notes)">
-                      <Textarea
-                        value={deficiencyDraft.generalComment ?? ''}
-                        onChange={(_, data) => setDeficiencyDraft((current) => ({ ...current, generalComment: data.value }))}
-                        disabled={!isDeficiencyDraftEditable}
-                      />
-                    </Field>
-                  </div>
-
-                  <Divider />
-
-                  <div className={styles.deficiencyEditorActions}>
-                    {associatedQuestionDeficiencies.length > 1 && deficiencyDraft.id && (
-                      <ResponsiveButton appearance="subtle" icon={<ArrowCircleRight16Regular />} label="Back to List" onClick={() => setDeficiencyPopoutMode('list')} />
-                    )}
-                    {deficiencyQuestionId && (
-                      <ResponsiveButton appearance="secondary" icon={<Add24Regular />} label="Add Another Deficiency" onClick={onAddAnotherQuestionDeficiency} />
-                    )}
-                    {deficiencyDraft.id && activeDeficiencyRecord?.statusCode !== 507650002 && (
-                      <ResponsiveButton appearance="secondary" icon={<CheckmarkCircle16Regular />} label="Close" disabled={!isActiveDeficiencyEditable} title={isActiveDeficiencyEditable ? undefined : 'This deficiency is read-only in the current lifecycle phase.'} onClick={onOpenDeficiencyCloseDialog} />
-                    )}
-                    <ResponsiveButton appearance="primary" icon={<Save24Regular />} label={t('save')} disabled={!canSaveDeficiency} onClick={() => { void onSaveDeficiency(); }} />
-                  </div>
-                </>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {isDeficiencyCloseDialogOpen && (
-        <Dialog open onOpenChange={(_, data) => {
-          if (!data.open) {
-            setIsDeficiencyCloseDialogOpen(false);
-          }
-        }}>
-          <DialogSurface>
-            <DialogBody>
-              <DialogContent>
-                <Field label="Closing Comment" required>
-                  <Textarea value={deficiencyCloseComment} onChange={(_, data) => setDeficiencyCloseComment(data.value)} />
-                </Field>
-              </DialogContent>
-              <div className={styles.unsavedResponsesActions}>
-                <Button appearance="secondary" onClick={() => setIsDeficiencyCloseDialogOpen(false)}>Cancel</Button>
-                <Button appearance="primary" disabled={!deficiencyCloseComment.trim()} onClick={() => { void onConfirmDeficiencyClose(); }}>
-                  Confirm Close
-                </Button>
-              </div>
-            </DialogBody>
-          </DialogSurface>
-        </Dialog>
-      )}
-
-      {isTeamMemberOpen && (
-        <div className={styles.floatingEditorHost}>
-          <Card appearance="filled-alternative" className={styles.floatingEditorCard}>
-            <div className={styles.deficiencyEditorLayout}>
-              <ModalHeader title="Add Team Member" onClose={onCloseTeamMemberPopout} />
-
+                        <div className={styles.deficiencyListHeader}>
+                          <Text weight="semibold">{deficiency.name || 'Untitled deficiency'}</Text>
+                          <Pill kind="status" value={deficiency.statusLabel ?? 'No Status'} />
+                        </div>
+                        <div className={styles.deficiencyListMeta}>
+                          <Pill kind="neutral" value={`Init ${deficiency.initialCategoryLabel ?? 'N/A'}`} />
+                          <Pill kind="neutral" value={`Acc ${deficiency.acceptedCategoryLabel ?? 'N/A'}`} />
+                        </div>
+                        <Caption1>{deficiency.generalComment?.trim() || 'No general comment'}</Caption1>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
               <div className={styles.modalFields}>
-                <Field label="Member" required>
-                  <Combobox
-                    inlinePopup
-                    placeholder={userLookupLoading ? 'Loading users...' : 'Select a user'}
-                    value={teamMemberDraft.memberName}
-                    selectedOptions={teamMemberDraft.memberId ? [teamMemberDraft.memberId] : []}
-                    onOptionSelect={(_, data) => {
-                      const selectedUser = userLookupOptions.find((item) => item.id === data.optionValue);
-                      setTeamMemberDraft((current) => ({
-                        ...current,
-                        memberId: selectedUser?.id,
-                        memberName: selectedUser?.label ?? '',
-                      }));
-                    }}
-                    disabled={userLookupLoading || userLookupOptions.length === 0}
-                  >
-                    {userLookupOptions.map((option) => (
-                      <Option key={option.id} value={option.id} text={option.label}>{option.label}</Option>
-                    ))}
-                  </Combobox>
+                <Field label="Deficiency Description">
+                  <Input
+                    value={deficiencyDraft.name}
+                    onChange={(_, data) => setDeficiencyDraft((current) => ({ ...current, name: data.value }))}
+                    disabled={!isDeficiencyDraftEditable}
+                  />
                 </Field>
 
-                <Field label="Role" required>
-                  <Combobox
-                    inlinePopup
-                    placeholder="Select a role"
-                    value={teamRoleOptions.find((item) => item.key === teamMemberDraft.roleCode)?.label ?? ''}
-                    selectedOptions={teamMemberDraft.roleCode !== undefined ? [String(teamMemberDraft.roleCode)] : []}
-                    onOptionSelect={(_, data) => {
-                      if (!data.optionValue) {
+                <div className={styles.deficiencyCategoryRow}>
+                  <Field label="Initial Category">
+                    <SearchableCombobox
+                      disabled={!isDeficiencyDraftEditable}
+                      options={deficiencyCategoryOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+                      placeholder="Select initial category"
+                      selectedValue={deficiencyDraft.initialCategoryCode !== undefined ? String(deficiencyDraft.initialCategoryCode) : undefined}
+                      onSelect={(value) => {
+                        if (value) {
+                          setDeficiencyDraft((current) => ({ ...current, initialCategoryCode: Number(value) }));
+                        }
+                      }}
+                    />
+                  </Field>
+
+                  <Field label="Accepted Category">
+                    <SearchableCombobox
+                      disabled={!isDeficiencyDraftEditable || !isAcceptedCategoryEnabled}
+                      options={deficiencyCategoryOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+                      placeholder={isAcceptedCategoryEnabled ? 'Select accepted category' : 'Available when status is In Progress'}
+                      selectedValue={deficiencyDraft.acceptedCategoryCode !== undefined ? String(deficiencyDraft.acceptedCategoryCode) : undefined}
+                      onSelect={(value) => {
+                        if (value) {
+                          setDeficiencyDraft((current) => ({ ...current, acceptedCategoryCode: Number(value) }));
+                        }
+                      }}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Status">
+                  <SearchableCombobox
+                    disabled={!isDeficiencyDraftEditable}
+                    options={deficiencyStatusOptions
+                      .filter((option) => option.key !== 507650002)
+                      .map((option) => ({ value: String(option.key), label: option.label }))}
+                    placeholder="Select status"
+                    selectedValue={deficiencyDraft.statusCode !== undefined ? String(deficiencyDraft.statusCode) : undefined}
+                    onSelect={(value) => {
+                      if (!value) {
                         return;
                       }
 
-                      setTeamMemberDraft((current) => ({
+                      const nextStatusCode = Number(value);
+                      setDeficiencyDraft((current) => ({
                         ...current,
-                        roleCode: Number(data.optionValue),
+                        statusCode: nextStatusCode,
+                        acceptedCategoryCode: nextStatusCode === DEFICIENCY_STATUS_IN_PROGRESS
+                          ? current.acceptedCategoryCode
+                          : undefined,
                       }));
                     }}
-                  >
-                    {teamRoleOptions.map((option) => (
-                      <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
-                    ))}
-                  </Combobox>
+                  />
+                </Field>
+
+                <Field label="Assigned To (UI only until Dataverse lookup is added)">
+                  <Input placeholder="Future Dataverse lookup" disabled />
+                </Field>
+
+                <Field label="General Comment (open/in-progress notes)">
+                  <Textarea
+                    value={deficiencyDraft.generalComment ?? ''}
+                    onChange={(_, data) => setDeficiencyDraft((current) => ({ ...current, generalComment: data.value }))}
+                    disabled={!isDeficiencyDraftEditable}
+                  />
                 </Field>
               </div>
+            )}
+          </div>
+        </AppDialog>
+      )}
 
-              <Divider />
+      {isDeficiencyCloseDialogOpen && (
+        <AppDialog
+          open={isDeficiencyCloseDialogOpen}
+          title="Close Deficiency"
+          onClose={() => setIsDeficiencyCloseDialogOpen(false)}
+          surfaceClassName={styles.dialogSurfaceCompact}
+          actions={[
+            <ResponsiveButton key="cancel" appearance="secondary" icon={<Dismiss24Regular />} label="Cancel" onClick={() => setIsDeficiencyCloseDialogOpen(false)} />,
+            <ResponsiveButton key="confirm" appearance="primary" icon={<CheckmarkCircle16Regular />} label="Confirm Close" disabled={!deficiencyCloseComment.trim()} onClick={() => { void onConfirmDeficiencyClose(); }} />,
+          ]}
+        >
+          <Field label="Closing Comment" required>
+            <Textarea value={deficiencyCloseComment} onChange={(_, data) => setDeficiencyCloseComment(data.value)} />
+          </Field>
+        </AppDialog>
+      )}
 
-              <div className={styles.deficiencyEditorActions}>
-                <ResponsiveButton appearance="primary" icon={<Add24Regular />} label="Add Member" disabled={!canSaveTeamMember || loading} onClick={() => { void onSaveTeamMember(); }} />
-              </div>
-            </div>
-          </Card>
-        </div>
+      {isTeamMemberOpen && (
+        <AppDialog
+          open={isTeamMemberOpen}
+          title="Add Team Member"
+          onClose={onCloseTeamMemberPopout}
+          surfaceClassName={styles.dialogSurfaceWide}
+          actions={<ResponsiveButton appearance="primary" icon={<Add24Regular />} label="Add Member" disabled={!canSaveTeamMember || loading} onClick={() => { void onSaveTeamMember(); }} />}
+        >
+          <div className={styles.modalFields}>
+            <Field label="Member" required>
+              <SearchableCombobox
+                disabled={userLookupLoading || userLookupOptions.length === 0}
+                noOptionsLabel={userLookupLoading ? 'Loading users...' : 'No users found'}
+                options={userLookupOptions.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder={userLookupLoading ? 'Loading users...' : 'Search and select a user'}
+                selectedValue={teamMemberDraft.memberId}
+                onSelect={(value) => {
+                  const selectedUser = userLookupOptions.find((item) => item.id === value);
+                  setTeamMemberDraft((current) => ({
+                    ...current,
+                    memberId: selectedUser?.id,
+                    memberName: selectedUser?.label ?? '',
+                  }));
+                }}
+              />
+            </Field>
+
+            <Field label="Role" required>
+              <SearchableCombobox
+                options={teamRoleOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+                placeholder="Search and select a role"
+                selectedValue={teamMemberDraft.roleCode !== undefined ? String(teamMemberDraft.roleCode) : undefined}
+                onSelect={(value) => {
+                  if (!value) {
+                    return;
+                  }
+
+                  setTeamMemberDraft((current) => ({
+                    ...current,
+                    roleCode: Number(value),
+                  }));
+                }}
+              />
+            </Field>
+          </div>
+        </AppDialog>
       )}
 
       {isChecklistTemplatePickerOpen && (
-        <div className={styles.floatingEditorHost}>
-          <Card appearance="filled-alternative" className={styles.floatingEditorCard}>
-            <div className={styles.templatePickerLayout}>
-              <ModalHeader title="Add Checklist From Template" onClose={onCloseChecklistTemplatePicker} />
+        <AppDialog
+          open={isChecklistTemplatePickerOpen}
+          title="Add Checklist From Template"
+          onClose={onCloseChecklistTemplatePicker}
+          surfaceClassName={styles.dialogSurfaceWide}
+          actions={<ResponsiveButton appearance="primary" icon={<CheckmarkCircle16Regular />} label="Confirm" disabled={!selectedTemplate || templateQuestionsLoading || loading} onClick={() => { void onConfirmChecklistTemplateCopy(); }} />}
+        >
+          <div className={styles.templatePickerLayout}>
+            <Field label="Template Checklist" required>
+              <SearchableCombobox
+                disabled={loading || templateRows.length === 0}
+                noOptionsLabel="No template checklists available"
+                options={templateRows.map((template) => ({ value: template.id, label: template.name }))}
+                placeholder="Search and select a template checklist"
+                selectedValue={selectedTemplateId || undefined}
+                onSelect={(value) => {
+                  if (value) {
+                    setSelectedTemplateId(value);
+                  }
+                }}
+              />
+            </Field>
 
-              <Field label="Template Checklist" required>
-                <Dropdown
-                  inlinePopup
-                  value={selectedTemplate?.name}
-                  selectedOptions={selectedTemplateId ? [selectedTemplateId] : []}
-                  onOptionSelect={(_, data) => {
-                    if (data.optionValue) {
-                      setSelectedTemplateId(data.optionValue);
-                    }
-                  }}
-                  disabled={loading || templateRows.length === 0}
-                >
-                  {templateRows.map((template) => (
-                    <Option key={template.id} value={template.id}>{template.name}</Option>
-                  ))}
-                </Dropdown>
-              </Field>
-
-              {selectedTemplate && (
-                <div className={styles.templatePickerMeta}>
-                  <Text weight="semibold">{selectedTemplate.name}</Text>
-                  <Caption1 className={styles.helperText}>
-                    {selectedTemplate.disciplineLabel ?? 'No discipline'} | {selectedTemplate.siteLabel ?? 'No site'}
-                  </Caption1>
-                  <Caption1 className={styles.helperText}>
-                    {selectedTemplate.description ?? 'No description provided.'}
-                  </Caption1>
-                </div>
-              )}
-
-              <Divider />
-
-              {!selectedTemplate && (
-                <Text className={styles.helperText}>Select a template checklist to preview the questions that will be copied to this plan.</Text>
-              )}
-
-              {selectedTemplate && templateQuestionsLoading && <Spinner label="Loading template questions..." />}
-
-              {selectedTemplate && !templateQuestionsLoading && templateQuestionsError && (
-                <Text>{templateQuestionsError}</Text>
-              )}
-
-              {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && templateQuestions.length === 0 && (
-                <Text className={styles.helperText}>This template does not have any associated questions yet.</Text>
-              )}
-
-              {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && templateQuestions.length > 0 && (
-                <div className={styles.templateQuestionPanel}>
-                  <div className={styles.templateQuestionList}>
-                    {templateQuestions.map((question) => (
-                      <Card key={question.id} className={styles.templateQuestionCard} size="small">
-                        <Text weight="semibold" className={styles.templateQuestionTitle}>{question.sequenceOrder}. {question.questionText}</Text>
-                        <Caption1 className={styles.helperText}>{question.isMandatory ? 'Required question' : 'Optional question'}</Caption1>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Divider />
-
-              <div className={styles.controlsRow}>
-                <ResponsiveButton appearance="primary" icon={<CheckmarkCircle16Regular />} label="Confirm" disabled={!selectedTemplate || templateQuestionsLoading || loading} onClick={() => { void onConfirmChecklistTemplateCopy(); }} />
+            {selectedTemplate && (
+              <div className={styles.templatePickerMeta}>
+                <Text weight="semibold">{selectedTemplate.name}</Text>
+                <Caption1 className={styles.helperText}>
+                  {selectedTemplate.disciplineLabel ?? 'No discipline'} | {selectedTemplate.siteLabel ?? 'No site'}
+                </Caption1>
+                <Caption1 className={styles.helperText}>
+                  {selectedTemplate.description ?? 'No description provided.'}
+                </Caption1>
               </div>
-            </div>
-          </Card>
-        </div>
+            )}
+
+            {!selectedTemplate && (
+              <Text className={styles.helperText}>Select a template checklist to preview the questions that will be copied to this plan.</Text>
+            )}
+
+            {selectedTemplate && templateQuestionsLoading && <Spinner label="Loading template questions..." />}
+
+            {selectedTemplate && !templateQuestionsLoading && templateQuestionsError && (
+              <Text>{templateQuestionsError}</Text>
+            )}
+
+            {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && templateQuestions.length === 0 && (
+              <Text className={styles.helperText}>This template does not have any associated questions yet.</Text>
+            )}
+
+            {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && templateQuestions.length > 0 && (
+              <div className={styles.templateQuestionPanel}>
+                <div className={styles.templateQuestionList}>
+                  {templateQuestions.map((question) => (
+                    <Card key={question.id} className={styles.templateQuestionCard} size="small">
+                      <Text weight="semibold" className={styles.templateQuestionTitle}>{question.sequenceOrder}. {question.questionText}</Text>
+                      <Caption1 className={styles.helperText}>{question.isMandatory ? 'Required question' : 'Optional question'}</Caption1>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </AppDialog>
       )}
 
-      <Dialog open={isCreatePlanOpen}>
-        <DialogSurface>
-          <DialogBody>
-            <ModalHeader title="Create PSSR Plan" onClose={() => setIsCreatePlanOpen(false)} />
-            <DialogContent>
-              <div className={styles.modalFields}>
-                <Field label="Name" required>
-                  <Input
-                    value={planDraft.name}
-                    onChange={(_, data) => setPlanDraft((current) => ({ ...current, name: data.value }))}
-                  />
-                </Field>
-                <Field label="Event">
-                  <Input
-                    value={planDraft.event}
-                    onChange={(_, data) => setPlanDraft((current) => ({ ...current, event: data.value }))}
-                  />
-                </Field>
-                <Field label="Site">
-                  <Dropdown
-                    inlinePopup
-                    value={siteOptions.find((item) => item.key === planDraft.siteCode)?.label}
-                    selectedOptions={planDraft.siteCode ? [String(planDraft.siteCode)] : []}
-                    onOptionSelect={(_, data) => {
-                      if (data.optionValue) {
-                        setPlanDraft((current) => ({ ...current, siteCode: Number(data.optionValue) }));
-                      }
-                    }}
-                  >
-                    {siteOptions.map((option) => (
-                      <Option key={option.key} value={String(option.key)}>{option.label}</Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <Field label="Type">
-                  <Dropdown
-                    inlinePopup
-                    value={typeOptions.find((item) => item.key === planDraft.typeCode)?.label}
-                    selectedOptions={planDraft.typeCode ? [String(planDraft.typeCode)] : []}
-                    onOptionSelect={(_, data) => {
-                      if (data.optionValue) {
-                        setPlanDraft((current) => ({
-                          ...current,
-                          typeCode: Number(data.optionValue),
-                          mocId: undefined,
-                          projectId: undefined,
-                          taRevisionId: undefined,
-                        }));
-                      }
-                    }}
-                  >
-                    {typeOptions.map((option) => (
-                      <Option key={option.key} value={String(option.key)}>{option.label}</Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                {planDraft.typeCode === PLAN_TYPE_CODES.moc && (
-                  <Field label="MoC">
-                    <Combobox
-                      inlinePopup
-                      placeholder="Search and select MoC"
-                      selectedOptions={planDraft.mocId ? [planDraft.mocId] : []}
-                      onOptionSelect={(_, data) => {
-                        setPlanDraft((current) => ({
-                          ...current,
-                          mocId: data.optionValue,
-                        }));
-                      }}
-                      disabled={lookupLoading}
-                    >
-                      {mocLookupOptions.map((option) => (
-                        <Option key={option.id} value={option.id} text={option.label}>{option.label}</Option>
-                      ))}
-                    </Combobox>
-                  </Field>
-                )}
-                {planDraft.typeCode === PLAN_TYPE_CODES.project && (
-                  <Field label="Project">
-                    <Combobox
-                      inlinePopup
-                      placeholder="Search and select Project"
-                      selectedOptions={planDraft.projectId ? [planDraft.projectId] : []}
-                      onOptionSelect={(_, data) => {
-                        setPlanDraft((current) => ({
-                          ...current,
-                          projectId: data.optionValue,
-                        }));
-                      }}
-                      disabled={lookupLoading}
-                    >
-                      {projectLookupOptions.map((option) => (
-                        <Option key={option.id} value={option.id} text={option.label}>{option.label}</Option>
-                      ))}
-                    </Combobox>
-                  </Field>
-                )}
-                {planDraft.typeCode === PLAN_TYPE_CODES.turnaround && (
-                  <Field label="Turnaround">
-                    <Combobox
-                      inlinePopup
-                      placeholder="Search and select Turnaround"
-                      selectedOptions={planDraft.taRevisionId ? [planDraft.taRevisionId] : []}
-                      onOptionSelect={(_, data) => {
-                        setPlanDraft((current) => ({
-                          ...current,
-                          taRevisionId: data.optionValue,
-                        }));
-                      }}
-                      disabled={lookupLoading}
-                    >
-                      {taRevisionLookupOptions.map((option) => (
-                        <Option key={option.id} value={option.id} text={option.label}>{option.label}</Option>
-                      ))}
-                    </Combobox>
-                  </Field>
-                )}
-                <Field label="System">
-                  <Input
-                    value={planDraft.system}
-                    onChange={(_, data) => setPlanDraft((current) => ({ ...current, system: data.value }))}
-                  />
-                </Field>
-              </div>
-            </DialogContent>
-            <Divider />
-            <div className={styles.unsavedResponsesActions}>
-              <ResponsiveButton appearance="primary" icon={<Save24Regular />} label="OK" onClick={() => { void onCreatePlan(); }} />
-            </div>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      <AppDialog
+        open={isCreatePlanOpen}
+        title="Create PSSR Plan"
+        onClose={() => setIsCreatePlanOpen(false)}
+        actions={<ResponsiveButton appearance="primary" icon={<Save24Regular />} label="OK" onClick={() => { void onCreatePlan(); }} />}
+      >
+        <div className={styles.modalFields}>
+          <Field label="Name" required>
+            <Input
+              value={planDraft.name}
+              onChange={(_, data) => setPlanDraft((current) => ({ ...current, name: data.value }))}
+            />
+          </Field>
+          <Field label="Event">
+            <Input
+              value={planDraft.event}
+              onChange={(_, data) => setPlanDraft((current) => ({ ...current, event: data.value }))}
+            />
+          </Field>
+          <Field label="Site">
+            <SearchableCombobox
+              options={siteOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+              selectedValue={planDraft.siteCode !== undefined ? String(planDraft.siteCode) : undefined}
+              onSelect={(value) => {
+                if (value) {
+                  setPlanDraft((current) => ({ ...current, siteCode: Number(value) }));
+                }
+              }}
+            />
+          </Field>
+          <Field label="Type">
+            <SearchableCombobox
+              options={typeOptions.map((option) => ({ value: String(option.key), label: option.label }))}
+              selectedValue={planDraft.typeCode !== undefined ? String(planDraft.typeCode) : undefined}
+              onSelect={(value) => {
+                if (!value) {
+                  return;
+                }
+
+                setPlanDraft((current) => ({
+                  ...current,
+                  typeCode: Number(value),
+                  mocId: undefined,
+                  projectId: undefined,
+                  taRevisionId: undefined,
+                }));
+              }}
+            />
+          </Field>
+          {planDraft.typeCode === PLAN_TYPE_CODES.moc && (
+            <Field label="MoC">
+              <SearchableCombobox
+                disabled={lookupLoading}
+                noOptionsLabel={lookupLoading ? 'Loading MoC records...' : 'No matching MoC records'}
+                options={mocLookupOptions.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder="Search and select MoC"
+                selectedValue={planDraft.mocId}
+                onSelect={(value) => {
+                  setPlanDraft((current) => ({
+                    ...current,
+                    mocId: value,
+                  }));
+                }}
+              />
+            </Field>
+          )}
+          {planDraft.typeCode === PLAN_TYPE_CODES.project && (
+            <Field label="Project">
+              <SearchableCombobox
+                disabled={lookupLoading}
+                noOptionsLabel={lookupLoading ? 'Loading project records...' : 'No matching projects'}
+                options={projectLookupOptions.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder="Search and select Project"
+                selectedValue={planDraft.projectId}
+                onSelect={(value) => {
+                  setPlanDraft((current) => ({
+                    ...current,
+                    projectId: value,
+                  }));
+                }}
+              />
+            </Field>
+          )}
+          {planDraft.typeCode === PLAN_TYPE_CODES.turnaround && (
+            <Field label="Turnaround">
+              <SearchableCombobox
+                disabled={lookupLoading}
+                noOptionsLabel={lookupLoading ? 'Loading turnaround records...' : 'No matching turnarounds'}
+                options={taRevisionLookupOptions.map((option) => ({ value: option.id, label: option.label }))}
+                placeholder="Search and select Turnaround"
+                selectedValue={planDraft.taRevisionId}
+                onSelect={(value) => {
+                  setPlanDraft((current) => ({
+                    ...current,
+                    taRevisionId: value,
+                  }));
+                }}
+              />
+            </Field>
+          )}
+          <Field label="System">
+            <Input
+              value={planDraft.system}
+              onChange={(_, data) => setPlanDraft((current) => ({ ...current, system: data.value }))}
+            />
+          </Field>
+        </div>
+      </AppDialog>
     </FluentProvider>
   );
 }

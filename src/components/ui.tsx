@@ -4,21 +4,26 @@ import {
   type ButtonProps,
   Caption1,
   Card,
+  Combobox,
+  Dialog,
+  DialogSurface,
   Divider,
   makeStyles,
   mergeClasses,
   MessageBar,
+  Option,
   ProgressBar,
   Spinner,
   Subtitle2,
   tokens,
 } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
-import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactElement, type ReactNode } from 'react';
 import { getCardAccentColor } from './CardAccent/CardAccent';
 import type { PillKind } from '../ui/tokens/pillTokens';
 import { formatDate } from '../app/format';
 import { List } from 'react-window';
+import { useResponsiveLayout } from './useResponsiveLayout';
 
 export { default as Pill } from './Pill/Pill';
 
@@ -41,11 +46,83 @@ const useStyles = makeStyles({
     minWidth: 'fit-content',
     maxWidth: '100%',
   },
-  responsiveButtonLabel: {
-    whiteSpace: 'nowrap',
+  responsiveButtonCompact: {
+    minWidth: '44px',
+    width: '44px',
+    paddingLeft: 0,
+    paddingRight: 0,
+    justifyContent: 'center',
+  },
+  dialogSurface: {
+    width: 'min(720px, calc(100vw - 32px))',
+    maxWidth: 'calc(100vw - 32px)',
+    maxHeight: 'min(84vh, calc(100dvh - 32px))',
+    overflow: 'hidden',
+    boxShadow: tokens.shadow64,
+    backgroundColor: tokens.colorNeutralBackground1,
     '@media (max-width: 700px)': {
-      display: 'none',
+      width: 'calc(100vw - 24px)',
+      maxWidth: 'calc(100vw - 24px)',
+      maxHeight: 'calc(100dvh - 24px)',
     },
+  },
+  dialogLayout: {
+    display: 'grid',
+    gridTemplateRows: 'auto minmax(0, 1fr) auto',
+    minHeight: 0,
+    maxHeight: 'min(84vh, calc(100dvh - 32px))',
+    '@media (max-width: 700px)': {
+      maxHeight: 'calc(100dvh - 24px)',
+    },
+  },
+  dialogHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalM,
+    padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalM}`,
+  },
+  dialogTitle: {
+    margin: 0,
+    minWidth: 0,
+    flex: '1 1 auto',
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: tokens.lineHeightBase500,
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+    '@media (max-width: 700px)': {
+      fontSize: tokens.fontSizeBase400,
+      lineHeight: tokens.lineHeightBase400,
+    },
+  },
+  dialogCloseButton: {
+    flex: '0 0 auto',
+    alignSelf: 'flex-start',
+  },
+  dialogContent: {
+    minHeight: 0,
+    overflowY: 'auto',
+    padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+  },
+  dialogFooter: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: tokens.spacingHorizontalS,
+    flexWrap: 'nowrap',
+    overflowX: 'auto',
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+  },
+  dialogFooterItem: {
+    flex: '0 0 auto',
+  },
+  dialogDivider: {
+    margin: 0,
+  },
+  searchableComboboxOptionMeta: {
+    color: tokens.colorNeutralForeground3,
   },
   galleryListItem: {
     boxSizing: 'border-box',
@@ -419,6 +496,7 @@ export function ResponsiveButton(props: {
   type?: 'button' | 'submit' | 'reset';
 }): ReactNode {
   const styles = useStyles();
+  const { isNarrow } = useResponsiveLayout();
   const {
     appearance,
     ariaLabel,
@@ -437,7 +515,7 @@ export function ResponsiveButton(props: {
     <Button
       as="button"
       appearance={appearance}
-      className={mergeClasses(styles.responsiveButton, className)}
+      className={mergeClasses(styles.responsiveButton, isNarrow && styles.responsiveButtonCompact, className)}
       disabled={disabled}
       icon={icon}
       iconPosition={iconPosition}
@@ -445,10 +523,132 @@ export function ResponsiveButton(props: {
       onClick={onClick}
       size={size}
       type={type}
-      title={title}
+      title={title ?? (isNarrow ? label : undefined)}
     >
-      <span className={styles.responsiveButtonLabel}>{label}</span>
+      {!isNarrow ? label : null}
     </Button>
+  );
+}
+
+export function AppDialog(props: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  actions?: ReactNode;
+  surfaceClassName?: string;
+  contentClassName?: string;
+}): ReactNode {
+  const styles = useStyles();
+
+  return (
+    <Dialog
+      modalType="modal"
+      open={props.open}
+      onOpenChange={(_, data) => {
+        if (!data.open) {
+          props.onClose();
+        }
+      }}
+    >
+      <DialogSurface className={mergeClasses(styles.dialogSurface, props.surfaceClassName)}>
+        <div className={styles.dialogLayout}>
+          <div className={styles.dialogHeader}>
+            <div className={styles.dialogTitle}>{props.title}</div>
+            <Button
+              appearance="subtle"
+              className={styles.dialogCloseButton}
+              aria-label="Close"
+              icon={<Dismiss24Regular />}
+              onClick={props.onClose}
+            />
+          </div>
+          <div className={mergeClasses(styles.dialogContent, props.contentClassName)}>
+            {props.children}
+          </div>
+          {props.actions ? (
+            <>
+              <Divider className={styles.dialogDivider} />
+              <div className={styles.dialogFooter}>
+                {Array.isArray(props.actions)
+                  ? props.actions.map((action, index) => (
+                    <div key={index} className={styles.dialogFooterItem}>
+                      {action}
+                    </div>
+                  ))
+                  : (
+                    <div className={styles.dialogFooterItem}>
+                      {props.actions}
+                    </div>
+                  )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </DialogSurface>
+    </Dialog>
+  );
+}
+
+type SearchableOption = {
+  value: string;
+  label: string;
+};
+
+export function SearchableCombobox(props: {
+  ariaLabel?: string;
+  disabled?: boolean;
+  noOptionsLabel?: string;
+  options: SearchableOption[];
+  placeholder?: string;
+  selectedValue?: string;
+  onSelect: (value: string | undefined) => void;
+}): ReactNode {
+  const styles = useStyles();
+  const selectedOption = props.options.find((option) => option.value === props.selectedValue);
+  const [filterText, setFilterText] = useState<string>('');
+  const inputValue = filterText || selectedOption?.label || '';
+
+  const filteredOptions = useMemo(() => {
+    const query = filterText.trim().toLowerCase();
+    if (!query) {
+      return props.options;
+    }
+
+    return props.options.filter((option) => option.label.toLowerCase().includes(query));
+  }, [filterText, props.options]);
+
+  return (
+    <Combobox
+      freeform
+      inlinePopup
+      aria-label={props.ariaLabel}
+      disabled={props.disabled}
+      placeholder={props.placeholder}
+      selectedOptions={props.selectedValue ? [props.selectedValue] : []}
+      value={inputValue}
+      onOpenChange={(_, data) => {
+        if (!data.open) {
+          setFilterText('');
+        }
+      }}
+      onChange={(event) => {
+        setFilterText(event.target.value);
+      }}
+      onOptionSelect={(_, data) => {
+        const nextValue = data.optionValue;
+        setFilterText('');
+        props.onSelect(nextValue);
+      }}
+    >
+      {filteredOptions.length > 0 ? filteredOptions.map((option) => (
+        <Option key={option.value} value={option.value} text={option.label}>{option.label}</Option>
+      )) : (
+        <Option disabled text={props.noOptionsLabel ?? 'No matches found'} value="__no_matches__">
+          <span className={styles.searchableComboboxOptionMeta}>{props.noOptionsLabel ?? 'No matches found'}</span>
+        </Option>
+      )}
+    </Combobox>
   );
 }
 
