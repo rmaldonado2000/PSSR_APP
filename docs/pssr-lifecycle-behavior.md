@@ -4,7 +4,7 @@ This document describes the lifecycle commands rendered in the current app, the 
 
 ## Current implementation scope
 
-- The React app now renders the missing lifecycle command buttons in the existing header/action areas only.
+- The React app renders lifecycle commands in the existing header/action areas and projects lifecycle status in the Plan Details summary rail.
 - Lifecycle mutations are centralized in the client transition layer under `src/app/lifecycleTransitions.ts`.
 - The app connects directly to Dataverse through the PAC Power Apps runtime used by this workspace.
 - The lifecycle process is enforced by the app through those transition guards and UI locks.
@@ -38,6 +38,7 @@ Buttons appear only in the existing Plan Details header action row.
     - status is non-terminal, which in the current Dataverse process means `In Progress`
     - `Comment = Awaiting PSSR-Lead approval.`
 - The app does not use the latest arbitrary `Plan / PSSR-Lead` history row to enable these buttons. It targets the pending unassigned request row specifically.
+  - After the latest `Plan / PSSR-Lead` approval becomes `Approved`, the app keeps the plan in the `Plan` phase, hides `Approve` and `Reject`, enables checklist question answering, and waits for the first successful question response save to move the plan to `Execution`.
 
 ### Execution
 
@@ -108,6 +109,16 @@ On transition:
 - plan phase becomes `Execution`
 - the affected checklist becomes `In Progress` when it was previously `Not Started`
 
+## Lifecycle rail projection
+
+The Plan Details summary rail is a UI projection of the current plan phase plus approval-derived sub-status.
+
+- The active step is still driven by the plan `stageCode`.
+- Completed steps render with the completed check styling.
+- When the plan remains in `Plan` and the latest `Plan / PSSR-Lead` approval is `Approved`, the `Plan` step renders as a green check with the accessible label `Plan approved`.
+- That green check is a sub-status indicator only. It does not advance the active step to `Execution`.
+- The app continues to show the plan as being in `Plan` until the existing `Plan -> Execution` transition runs on first answer save.
+
 ## Lock matrix
 
 ### Plan metadata
@@ -175,6 +186,7 @@ Accepted category stays disabled until the deficiency status is `In Progress`.
 
 - Disabled lifecycle commands surface the unmet conditions through button hover text.
 - The in-screen warning bar is reserved for plan-state blockers and does not repeat user-specific role permission messages.
+- The warning bar does not show a blocker for the approved waiting state where the plan is still in `Plan`, the latest `Plan / PSSR-Lead` approval is `Approved`, and the app is waiting for the first answered checklist question.
 - Transition failures surface through the app error path.
 - The transition layer returns structured `{ success, errors, warnings, updatedIds }` results so UI messages can remain specific.
 

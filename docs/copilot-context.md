@@ -86,8 +86,8 @@ Edit/interaction locks currently enforced:
 
 ## Screens And Tabs
 
-- `PlansScreen`: searchable and filterable plan gallery with mobile filter drawer
-- `PlanDetailsScreen`: summary, lifecycle rail, and tabs for details, checklists, deficiencies, approvals, and team; existing team member rows open an add/edit/delete role dialog
+- `PlansScreen`: searchable and filterable plan gallery with a mobile filter drawer that opens from the right and stages filter edits until the user taps Apply; closing the drawer discards draft filter changes
+- `PlanDetailsScreen`: summary, lifecycle rail, and tabs for details, checklists, deficiencies, approvals, and team; existing team member rows open an add/edit/delete role dialog; when a plan remains in Plan and PSSR-Lead approval is Approved, the Plan step shows a green approval check without advancing the phase
 - `ChecklistDetailsScreen`: questions, details, and deficiencies tabs; supports swipe-based mobile answer staging and defers question-linked deficiency creates/updates/deletes until the checklist save action is confirmed
 - `TemplateLibraryScreen`: template checklist and template question management plus copy-to-plan flow
 
@@ -99,6 +99,7 @@ Edit/interaction locks currently enforced:
 - Status/phase badges use `Pill`; accent colors come from shared token utilities
 - App shell uses Fluent `makeStyles` plus `src/index.css`
 - Mobile-specific layout logic is common in plan and checklist detail headers
+- Mobile overlay controls should prefer Fluent positioning/overlay behavior over custom panel animation; the Plans screen drawer uses local draft state plus explicit Apply/Discard semantics instead of live-updating filters while open
 
 ## Telemetry And Localization
 

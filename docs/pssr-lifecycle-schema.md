@@ -41,6 +41,12 @@ Plan phase option set `crc07_pssrstage`:
 
 Note: the current schema does not have a separate `Completed` plan phase choice. The post-approval pending-final-sign-off state and the finalized state are both represented with `crc07_pssrstage = Completion`, and finalization is inferred from the latest Completion/PSSR-Lead approval record.
 
+Derived plan lifecycle state used by the app:
+
+- `Plan approved but still in Plan` is represented by `crc07_pssrstage = Plan` plus the latest `Plan / PSSR-Lead` approval row having decision status `Approved`.
+- `Execution` does not begin at approval time. The app advances the plan to `Execution` only after the first successful checklist question response save.
+- `Completion finalized` is represented by `crc07_pssrstage = Completion` plus the latest `Completion / PSSR-Lead` approval row having decision status `Completed`.
+
 ## Checklist
 
 Primary key: `crc07_pssr_checklistid`
@@ -195,6 +201,12 @@ Pending Plan approval request rule:
 	- `_crc07_member_value` is empty
 	- the approval status is non-terminal (`In Progress` in the current process)
 	- `crc07_comment = Awaiting PSSR-Lead approval.`
+
+Approved Plan waiting-state rule:
+
+- After the latest `Plan / PSSR-Lead` approval row is updated to `Approved`, the app no longer expects an in-progress Plan approval request row for UI command state.
+- In that state, the plan remains at `crc07_pssrstage = Plan`, checklist question answering becomes eligible, and the app waits for first answer save to perform the `Plan -> Execution` transition.
+- The Plan Details lifecycle rail renders this derived state as a green approved check on the `Plan` node while keeping `Plan` as the active phase.
 
 Draft-to-Plan approval records:
 

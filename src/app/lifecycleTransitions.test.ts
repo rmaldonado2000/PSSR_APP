@@ -360,6 +360,21 @@ describe('lifecycle transitions', () => {
     expect(deps.updateChecklist).toHaveBeenCalledWith('checklist-1', { statusCode: CHECKLIST_STATUS_IN_PROGRESS });
   });
 
+  it('treats an approved Plan phase as waiting for first answer instead of blocked approval', () => {
+    const commandState = getPlanPhaseCommandState({
+      plan: createPlan({ stageCode: PLAN_STAGE_PLAN }),
+      approvals: [createApproval({ stageCode: PLAN_STAGE_PLAN, roleCode: TEAM_ROLE_PSSR_LEAD, decisionCode: APPROVAL_STATUS_APPROVED })],
+      checklists: [createChecklist()],
+      deficiencies: [],
+      teamMembers: [createTeam({ memberId: 'user-pssr', roleCode: TEAM_ROLE_PSSR_LEAD })],
+      currentUser: createUser({ systemUserId: 'user-pssr' }),
+    });
+
+    expect(commandState.approve.visible).toBe(false);
+    expect(commandState.reject.visible).toBe(false);
+    expect(commandState.approve.reasons).not.toContain('The latest Plan approval is not in progress.');
+  });
+
   it('blocks checklist completion until all answers exist and No answers have deficiencies', async () => {
     const deps = createDependencies();
     const context = createContext();

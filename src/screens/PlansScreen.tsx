@@ -2,6 +2,7 @@ import {
   Button,
   Drawer,
   DrawerBody,
+  DrawerFooter,
   DrawerHeader,
   DrawerHeaderTitle,
   Dropdown,
@@ -43,6 +44,12 @@ interface FilterOption {
   label: string;
 }
 
+interface PlanFilters {
+  siteFilter?: number;
+  typeFilter?: number;
+  phaseFilter?: number;
+}
+
 const useStyles = makeStyles({
   screenPanel: {
     height: '100%',
@@ -74,6 +81,10 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalM,
+  },
+  drawerFooter: {
+    display: 'flex',
+    justifyContent: 'flex-end',
   },
   drawerFilterField: {
      display: 'flex',
@@ -162,14 +173,44 @@ function readFilterValue(optionValue?: string): number | undefined {
   return Number(optionValue);
 }
 
+function createAppliedFilters(props: PlansScreenProps): PlanFilters {
+  return {
+    siteFilter: props.siteFilter,
+    typeFilter: props.typeFilter,
+    phaseFilter: props.phaseFilter,
+  };
+}
+
 export default function PlansScreen(props: PlansScreenProps): ReactNode {
   const styles = useStyles();
   const [isMobileLayout, setIsMobileLayout] = useState<boolean>(getIsMobileLayout);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<PlanFilters>(() => createAppliedFilters(props));
 
   const activeSiteFilterLabel = selectedOptionLabel(props.siteOptions, props.siteFilter, '');
   const activeTypeFilterLabel = selectedOptionLabel(props.typeOptions, props.typeFilter, '');
   const activePhaseFilterLabel = selectedOptionLabel(props.phaseOptions, props.phaseFilter, '');
+
+  const syncDraftFilters = (): void => {
+    setDraftFilters({ ...createAppliedFilters(props) });
+  };
+
+  const openDrawer = (): void => {
+    syncDraftFilters();
+    setIsDrawerOpen(true);
+  };
+
+  const closeDrawerDiscard = (): void => {
+    syncDraftFilters();
+    setIsDrawerOpen(false);
+  };
+
+  const applyDraftFilters = (): void => {
+    props.onSiteFilterChange(draftFilters.siteFilter);
+    props.onTypeFilterChange(draftFilters.typeFilter);
+    props.onPhaseFilterChange(draftFilters.phaseFilter);
+    setIsDrawerOpen(false);
+  };
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_LAYOUT_QUERY);
@@ -195,7 +236,7 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
             <Field label={t('searchPlans')} style={{ flex: 1 }}>
               <Input className={styles.searchInput} value={props.searchText} onChange={(_, data) => props.onSearchTextChange(data.value)} />
             </Field>
-            <Button aria-label="Open filters" icon={<Filter24Regular />} className={styles.mobileFilterButtonRow} onClick={() => setIsDrawerOpen(true)} />
+            <Button aria-label="Open filters" icon={<Filter24Regular />} className={styles.mobileFilterButtonRow} onClick={openDrawer} />
           </div>
 
           <div className={styles.mobileFilterTagsContainer}>
@@ -268,11 +309,23 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
              <ResponsiveButton className={styles.desktopCreateButton} icon={<Add24Regular />} label="Create Plan" onClick={props.onCreatePlan} />
           </div>
         </div>
-        <Drawer type="overlay" open={isDrawerOpen} onOpenChange={(_, { open }) => setIsDrawerOpen(open)}>
+        <Drawer
+          type="overlay"
+          position="end"
+          open={isDrawerOpen}
+          onOpenChange={(_, { open }) => {
+            if (open) {
+              openDrawer();
+              return;
+            }
+
+            closeDrawerDiscard();
+          }}
+        >
           <DrawerHeader>
             <DrawerHeaderTitle
                action={
-                 <ResponsiveButton appearance="subtle" label="Close" icon={<Dismiss24Regular />} onClick={() => setIsDrawerOpen(false)} />
+                 <ResponsiveButton appearance="subtle" label="Close" icon={<Dismiss24Regular />} onClick={closeDrawerDiscard} />
                }
             >
                Filters
@@ -283,10 +336,13 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
                    <Field label="Site" className={styles.drawerFilterField}>
                     <Dropdown
                        inlinePopup
-                      value={selectedOptionLabel(props.siteOptions, props.siteFilter, 'All sites')}
-                       selectedOptions={selectedOptionValue(props.siteFilter)}
+                      value={selectedOptionLabel(props.siteOptions, draftFilters.siteFilter, 'All sites')}
+                       selectedOptions={selectedOptionValue(draftFilters.siteFilter)}
                        onOptionSelect={(_, data) => {
-                        props.onSiteFilterChange(readFilterValue(data.optionValue));
+                        setDraftFilters((current) => ({
+                          ...current,
+                          siteFilter: readFilterValue(data.optionValue),
+                        }));
                       }}
                      >
                        <Option value={ALL_OPTION_VALUE} text="All sites">All sites</Option>
@@ -298,10 +354,13 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
                    <Field label="Type" className={styles.drawerFilterField}>
                      <Dropdown
                        inlinePopup
-                       value={selectedOptionLabel(props.typeOptions, props.typeFilter, 'All types')}
-                       selectedOptions={selectedOptionValue(props.typeFilter)}
+                         value={selectedOptionLabel(props.typeOptions, draftFilters.typeFilter, 'All types')}
+                         selectedOptions={selectedOptionValue(draftFilters.typeFilter)}
                        onOptionSelect={(_, data) => {
-                         props.onTypeFilterChange(readFilterValue(data.optionValue));
+                           setDraftFilters((current) => ({
+                             ...current,
+                             typeFilter: readFilterValue(data.optionValue),
+                           }));
                        }}
                      >
                        <Option value={ALL_OPTION_VALUE} text="All types">All types</Option>
@@ -313,10 +372,13 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
                   <Field label="Phase" className={styles.drawerFilterField}>
                     <Dropdown
                        inlinePopup
-                       value={selectedOptionLabel(props.phaseOptions, props.phaseFilter, 'All phases')}
-                       selectedOptions={selectedOptionValue(props.phaseFilter)}
+                       value={selectedOptionLabel(props.phaseOptions, draftFilters.phaseFilter, 'All phases')}
+                       selectedOptions={selectedOptionValue(draftFilters.phaseFilter)}
                        onOptionSelect={(_, data) => {
-                        props.onPhaseFilterChange(readFilterValue(data.optionValue));
+                        setDraftFilters((current) => ({
+                          ...current,
+                          phaseFilter: readFilterValue(data.optionValue),
+                        }));
                       }}
                     >
                       <Option value={ALL_OPTION_VALUE} text="All phases">All phases</Option>
@@ -327,6 +389,9 @@ export default function PlansScreen(props: PlansScreenProps): ReactNode {
                   </Field>
                </div>
           </DrawerBody>
+          <DrawerFooter className={styles.drawerFooter}>
+            <Button appearance="primary" onClick={applyDraftFilters}>Apply</Button>
+          </DrawerFooter>
         </Drawer>
       </div>
 

@@ -1253,6 +1253,10 @@ export default function App() {
     }
 
     if (selectedPlan.stageCode === PLAN_STAGE_PLAN || selectedPlan.stageCode === PLAN_STAGE_APPROVAL) {
+      if (!selectedPlanCommandState.approve.visible) {
+        return [] as string[];
+      }
+
       return selectedPlanCommandState.approve.enabled ? [] : getDisplayWarnings(selectedPlanCommandState.approve.reasons);
     }
 
@@ -2844,6 +2848,10 @@ export default function App() {
     }
 
     if (selectedPlan.stageCode === PLAN_STAGE_PLAN) {
+      if (!selectedPlanCommandState.approve.visible && !selectedPlanCommandState.reject.visible) {
+        return [];
+      }
+
       return [
         {
           key: 'approve-plan',

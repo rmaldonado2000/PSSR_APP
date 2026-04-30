@@ -242,6 +242,7 @@ export function getPlanPhaseCommandState(input: {
 } {
   const { approvals, checklists, currentUser, deficiencies, plan, teamMembers } = input;
   const planApproval = findPendingApprovalRequest(approvals, PLAN_STAGE_PLAN, TEAM_ROLE_PSSR_LEAD, PLAN_APPROVAL_REQUEST_COMMENT);
+  const planApproved = plan.stageCode === PLAN_STAGE_PLAN && isPlanApproved(approvals);
   const approvalApproval = findLatestApproval(approvals, PLAN_STAGE_APPROVAL, TEAM_ROLE_PU_LEAD);
   const completionApproval = findLatestApproval(approvals, PLAN_STAGE_COMPLETION, TEAM_ROLE_PSSR_LEAD);
   const finalized = isPlanFinalized(approvals);
@@ -257,7 +258,7 @@ export function getPlanPhaseCommandState(input: {
   if (!hasTeamRole(teamMembers, currentUser, TEAM_ROLE_PSSR_LEAD)) {
     planApproveReasons.push('Only the PSSR-Lead can approve or reject this phase.');
   }
-  if (!isApprovalInProgress(planApproval)) {
+  if (!planApproved && !isApprovalInProgress(planApproval)) {
     planApproveReasons.push('The latest Plan approval is not in progress.');
   }
 
@@ -295,12 +296,12 @@ export function getPlanPhaseCommandState(input: {
       reasons: advanceToPlanReasons,
     },
     approve: {
-      visible: plan.stageCode === PLAN_STAGE_PLAN || plan.stageCode === PLAN_STAGE_APPROVAL,
+      visible: plan.stageCode === PLAN_STAGE_APPROVAL || (plan.stageCode === PLAN_STAGE_PLAN && !planApproved),
       enabled: (plan.stageCode === PLAN_STAGE_PLAN ? planApproveReasons : approvalReasons).length === 0,
       reasons: plan.stageCode === PLAN_STAGE_PLAN ? planApproveReasons : approvalReasons,
     },
     reject: {
-      visible: plan.stageCode === PLAN_STAGE_PLAN || plan.stageCode === PLAN_STAGE_APPROVAL,
+      visible: plan.stageCode === PLAN_STAGE_APPROVAL || (plan.stageCode === PLAN_STAGE_PLAN && !planApproved),
       enabled: (plan.stageCode === PLAN_STAGE_PLAN ? planApproveReasons : approvalReasons).length === 0,
       reasons: plan.stageCode === PLAN_STAGE_PLAN ? planApproveReasons : approvalReasons,
     },

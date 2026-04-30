@@ -2,7 +2,7 @@ import { Caption1, Dropdown, Field, Input, MessageBar, Option, ProgressBar, Tab,
 import { Add24Regular, ArrowClockwise24Regular, Checkmark12Regular, CheckmarkCircle16Regular, ClipboardTask24Regular, Info24Regular, Person24Regular, Save24Regular, TableMoveAbove24Regular, Tag16Regular, Wrench24Regular } from '@fluentui/react-icons';
 import { Fragment, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { formatRoleLabel } from '../app/format';
-import { isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
+import { isPlanApproved, isPlanFinalized, PLAN_STAGE_APPROVAL, PLAN_STAGE_COMPLETION, PLAN_STAGE_DRAFT, PLAN_STAGE_EXECUTION, PLAN_STAGE_PLAN } from '../app/lifecycle';
 import type { ApprovalVm, ChecklistVm, DeficiencyVm, PlanDetailsDraftVm, PlanVm, TeamMemberVm } from '../app/types';
 import { mobileHeaderStyles } from '../components/mobileHeaderStyles';
 import { CardDate, DataState, GalleryCard, GalleryListItem, Pill, ResponsiveButton, SectionPanel, VirtualizedList } from '../components/ui';
@@ -94,6 +94,12 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorPaletteGreenBackground2,
     border: `2px solid ${tokens.colorPaletteGreenBorderActive}`,
     color: tokens.colorPaletteGreenForeground2,
+  },
+  lifecycleStepCircleApproved: {
+    backgroundColor: tokens.colorPaletteGreenBackground2,
+    border: `2px solid ${tokens.colorPaletteGreenBorderActive}`,
+    color: tokens.colorPaletteGreenForeground2,
+    boxShadow: `0 0 0 4px ${tokens.colorPaletteGreenBackground1}`,
   },
   lifecycleStepCircleActive: {
     backgroundColor: tokens.colorBrandBackground2,
@@ -264,6 +270,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
   const currentStageIndex = PLAN_LIFECYCLE_STAGES.findIndex((stage) => stage.code === props.selectedPlan.stageCode);
   const normalizedCurrentStageIndex = currentStageIndex >= 0 ? currentStageIndex : 0;
   const isCompletionFinalized = isPlanFinalized(props.approvals);
+  const isPlanApprovalApproved = props.selectedPlan.stageCode === PLAN_STAGE_PLAN && isPlanApproved(props.approvals);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_TAB_QUERY);
@@ -301,6 +308,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
             <div className={styles.lifecycleRail}>
               <div className={styles.lifecycleStepper}>
                 {PLAN_LIFECYCLE_STAGES.map((stage, index) => {
+                  const isPlanApprovedStep = isPlanApprovalApproved && stage.code === PLAN_STAGE_PLAN;
                   const isCompleted = isCompletionFinalized
                     ? index <= normalizedCurrentStageIndex
                     : index < normalizedCurrentStageIndex;
@@ -318,11 +326,14 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                           className={mergeClasses(
                             styles.lifecycleStepCircle,
                             isCompleted && styles.lifecycleStepCircleCompleted,
-                            isActive && styles.lifecycleStepCircleActive,
+                            isActive && !isPlanApprovedStep && styles.lifecycleStepCircleActive,
+                            isPlanApprovedStep && styles.lifecycleStepCircleApproved,
                           )}
                           aria-current={isActive ? 'step' : undefined}
+                          aria-label={isPlanApprovedStep ? 'Plan approved' : undefined}
+                          role={isPlanApprovedStep ? 'img' : undefined}
                         >
-                          {isCompleted ? <Checkmark12Regular /> : stage.icon}
+                          {isPlanApprovedStep || isCompleted ? <Checkmark12Regular /> : stage.icon}
                         </div>
                       </div>
                       {index < PLAN_LIFECYCLE_STAGES.length - 1 && (
