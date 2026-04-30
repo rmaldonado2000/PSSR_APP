@@ -1156,12 +1156,14 @@ export async function updateApproval(approvalId: string, payload: Partial<{
   statusCode: number;
   comment: string;
   approveOn: string;
+  memberId: string;
 }>): Promise<void> {
   await withMutationRetry(async () => {
     await Crc07_pssr_approvalsService.update(approvalId, {
       crc07_status: payload.statusCode as never,
       crc07_comment: payload.comment,
       crc07_date: payload.approveOn,
+      'crc07_Member@odata.bind': payload.memberId ? `/systemusers(${normalizeGuid(payload.memberId)})` : undefined,
     });
   });
 }

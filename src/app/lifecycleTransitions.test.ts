@@ -26,6 +26,7 @@ import {
 import {
   advanceDraftToPlan,
   advanceExecutionToApproval,
+  approveApprovalStage,
   approvePlanStage,
   closeDeficiency,
   completeChecklist,
@@ -206,7 +207,11 @@ describe('lifecycle transitions', () => {
 
     const result = await approvePlanStage(context, deps);
     expect(result.success).toBe(true);
-    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan', expect.objectContaining({
+      statusCode: APPROVAL_STATUS_APPROVED,
+      comment: 'Approved by PSSR-Lead.',
+      memberId: undefined,
+    }));
   });
 
   it('treats a null approval status as in progress for Plan approval', async () => {
@@ -228,7 +233,11 @@ describe('lifecycle transitions', () => {
     const result = await approvePlanStage(context, deps);
 
     expect(result.success).toBe(true);
-    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan', expect.objectContaining({
+      statusCode: APPROVAL_STATUS_APPROVED,
+      comment: 'Approved by PSSR-Lead.',
+      memberId: undefined,
+    }));
   });
 
   it('uses the pending unassigned PSSR-Lead request row instead of a newer non-request Plan approval row', async () => {
@@ -262,7 +271,11 @@ describe('lifecycle transitions', () => {
     const result = await approvePlanStage(context, deps);
 
     expect(result.success).toBe(true);
-    expect(deps.updateApproval).toHaveBeenCalledWith('approval-request', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-request', expect.objectContaining({
+      statusCode: APPROVAL_STATUS_APPROVED,
+      comment: 'Approved by PSSR-Lead.',
+      memberId: 'user-pssr',
+    }));
   });
 
   it('creates a missing Plan approval record before approving legacy Plan-phase records', async () => {
@@ -283,7 +296,30 @@ describe('lifecycle transitions', () => {
       stageCode: PLAN_STAGE_PLAN,
       roleCode: TEAM_ROLE_PSSR_LEAD,
     }));
-    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan-created', expect.objectContaining({ statusCode: APPROVAL_STATUS_APPROVED }));
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-plan-created', expect.objectContaining({
+      statusCode: APPROVAL_STATUS_APPROVED,
+      comment: 'Approved by PSSR-Lead.',
+      memberId: undefined,
+    }));
+  });
+
+  it('approves the Approval phase with the acting PU-Lead on the same approval row', async () => {
+    const deps = createDependencies();
+    const context = createContext({
+      plan: createPlan({ stageCode: PLAN_STAGE_APPROVAL }),
+      approvals: [createApproval({ id: 'approval-stage', stageCode: PLAN_STAGE_APPROVAL, roleCode: TEAM_ROLE_PU_LEAD })],
+      currentUser: createUser({ systemUserId: 'user-pu' }),
+      teamMembers: [createTeam({ memberId: 'user-pu', roleCode: TEAM_ROLE_PU_LEAD })],
+    });
+
+    const result = await approveApprovalStage(context, deps);
+
+    expect(result.success).toBe(true);
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-stage', expect.objectContaining({
+      statusCode: APPROVAL_STATUS_APPROVED,
+      comment: 'Approved by PU-Lead.',
+      memberId: 'user-pu',
+    }));
   });
 
   it('rejects the Plan phase back to Draft', async () => {
@@ -398,6 +434,11 @@ describe('lifecycle transitions', () => {
       deps,
     );
     expect(allowed.success).toBe(true);
+    expect(deps.updateApproval).toHaveBeenCalledWith('approval-1', expect.objectContaining({
+      statusCode: APPROVAL_STATUS_COMPLETED,
+      comment: 'Completed by PSSR-Lead.',
+      memberId: 'user-pssr',
+    }));
   });
 
   it('closes a deficiency only with a closing comment', async () => {

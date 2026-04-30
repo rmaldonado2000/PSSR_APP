@@ -44,6 +44,7 @@ Digitally manages the Pre-Startup Safety Review (PSSR) process, including plans,
 - Checklist statuses: Not Started -> In Progress -> Completed
 - Deficiency statuses: Open -> In Progress -> Closed
 - Approval statuses include Approved, Rejected, Completed, and In Progress
+- Approval decision updates write status, decision date, comment, and acting member on the same approval history row; Plan approval targets the pending unassigned `Plan / PSSR-Lead` request row, while Approval and Completion decisions target the latest in-progress row for their phase and role
 - Lifecycle transitions and UI locks are enforced or referenced in `lifecycle.ts` and `lifecycleTransitions.ts`
 - Full lifecycle schema and behavior are documented in `docs/pssr-lifecycle-schema.md` and `docs/pssr-lifecycle-behavior.md`
 - Some lifecycle gates or approval blocking rules may not be implemented unless explicitly confirmed in lifecycle documentation and code

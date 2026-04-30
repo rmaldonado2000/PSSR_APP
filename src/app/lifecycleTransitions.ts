@@ -51,7 +51,7 @@ type TransitionDependencies = {
     memberId?: string;
     approveOn?: string;
   }) => Promise<string>;
-  updateApproval: (approvalId: string, payload: { statusCode?: number; comment?: string; approveOn?: string }) => Promise<void>;
+  updateApproval: (approvalId: string, payload: { statusCode?: number; comment?: string; approveOn?: string; memberId?: string }) => Promise<void>;
   updateDeficiency: (deficiencyId: string, payload: {
     statusCode?: number;
     closeoutComment?: string;
@@ -62,6 +62,18 @@ type TransitionDependencies = {
 
 function getActorUserId(currentUser: CurrentUserProfileVm | undefined): string | undefined {
   return currentUser?.systemUserId;
+}
+
+function getApprovalDecisionComment(roleCode: number, action: 'approved' | 'completed'): string {
+  if (roleCode === TEAM_ROLE_PSSR_LEAD) {
+    return action === 'completed' ? 'Completed by PSSR-Lead.' : 'Approved by PSSR-Lead.';
+  }
+
+  if (roleCode === TEAM_ROLE_PU_LEAD) {
+    return 'Approved by PU-Lead.';
+  }
+
+  return action === 'completed' ? 'Completed.' : 'Approved.';
 }
 
 function getNow(): string {
@@ -166,8 +178,11 @@ export async function approvePlanStage(
   }
 
   try {
+    const actorUserId = getActorUserId(context.currentUser);
     await dependencies.updateApproval(planApprovalId!, {
       statusCode: APPROVAL_STATUS_APPROVED,
+      comment: getApprovalDecisionComment(TEAM_ROLE_PSSR_LEAD, 'approved'),
+      memberId: actorUserId,
       approveOn: getNow(),
     });
     return createSuccessResult({ planApprovalId: planApprovalId, planId: context.plan.id });
@@ -306,8 +321,11 @@ export async function approveApprovalStage(
   }
 
   try {
+    const actorUserId = getActorUserId(context.currentUser);
     await dependencies.updateApproval(latestApprovalApproval.id, {
       statusCode: APPROVAL_STATUS_APPROVED,
+      comment: getApprovalDecisionComment(TEAM_ROLE_PU_LEAD, 'approved'),
+      memberId: actorUserId,
       approveOn: getNow(),
     });
     await dependencies.updatePlan(context.plan.id, { stageCode: PLAN_STAGE_COMPLETION });
@@ -400,8 +418,11 @@ export async function finalSignOff(
   }
 
   try {
+    const actorUserId = getActorUserId(context.currentUser);
     await dependencies.updateApproval(latestCompletionApproval.id, {
       statusCode: APPROVAL_STATUS_COMPLETED,
+      comment: getApprovalDecisionComment(TEAM_ROLE_PSSR_LEAD, 'completed'),
+      memberId: actorUserId,
       approveOn: getNow(),
     });
     return createSuccessResult({ planId: context.plan.id, completionApprovalId: latestCompletionApproval.id });
