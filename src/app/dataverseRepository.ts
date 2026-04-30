@@ -80,6 +80,11 @@ type SystemUserRow = {
   crc07_sitename?: string;
 };
 
+type ChecklistMetricRow = {
+  crc07_pssr_checklistid?: string;
+  crc07_status?: number;
+};
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -447,7 +452,7 @@ export async function getPlans(): Promise<PlanVm[]> {
             }),
             `Timed out loading checklist fallback metrics for plan alias ${alias}.`,
             `Loading checklist fallback metrics for plan alias ${alias}`
-          ).catch(() => [] as any[])
+          ).catch(() => [] as ChecklistMetricRow[])
         );
 
         fallbackPromises.push(
@@ -459,7 +464,7 @@ export async function getPlans(): Promise<PlanVm[]> {
             }),
             `Timed out loading checklist fallback metrics for plan GUID.`,
             `Loading checklist fallback metrics for plan GUID`
-          ).catch(() => [] as any[])
+          ).catch(() => [] as ChecklistMetricRow[])
         );
 
         const fallbackResults = await Promise.all(fallbackPromises);

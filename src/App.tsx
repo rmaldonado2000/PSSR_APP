@@ -745,6 +745,13 @@ function createPlanDetailsDraft(plan?: PlanVm): PlanDetailsDraftVm {
   };
 }
 
+function resolveSelectedTemplateId(rows: TemplateChecklistVm[], currentId: string, preferredId?: string): string {
+  return rows.find((item) => item.id === preferredId)?.id
+    ?? rows.find((item) => item.id === currentId)?.id
+    ?? rows[0]?.id
+    ?? '';
+}
+
 function createTemplateChecklistDraft(template?: TemplateChecklistVm): TemplateChecklistDraft {
   return {
     id: template?.id,
@@ -1022,9 +1029,13 @@ export default function App() {
       return siteMatch && typeMatch && phaseMatch && queryMatch;
     });
   }, [phaseFilter, plans, searchText, siteFilter, typeFilter]);
-  const selectedTemplate = useMemo(
-    () => templateRows.find((item) => item.id === selectedTemplateId),
+  const effectiveSelectedTemplateId = useMemo(
+    () => resolveSelectedTemplateId(templateRows, selectedTemplateId),
     [selectedTemplateId, templateRows],
+  );
+  const selectedTemplate = useMemo(
+    () => templateRows.find((item) => item.id === effectiveSelectedTemplateId),
+    [effectiveSelectedTemplateId, templateRows],
   );
   const associatedQuestionDeficiencies = useMemo(
     () => deficiencyQuestionId
@@ -1212,10 +1223,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setPlanDetailsDraft(createPlanDetailsDraft(selectedPlan));
-  }, [selectedPlan]);
-
-  useEffect(() => {
     if (!isCreatePlanOpen) {
       return;
     }
@@ -1341,6 +1348,7 @@ export default function App() {
     const latestPlans = await loadPlans();
     const refreshedPlan = latestPlans.find((item) => item.id === selectedPlan.id) ?? selectedPlan;
     setSelectedPlan(refreshedPlan);
+    setPlanDetailsDraft(createPlanDetailsDraft(refreshedPlan));
 
     const nextChecklists = await loadPlanChildren(selectedPlan.id);
     if (!selectedChecklist) {
@@ -1463,9 +1471,15 @@ export default function App() {
   const loadTemplates = useCallback(async (): Promise<TemplateChecklistVm[]> => {
     const rows = await getTemplateChecklists();
     setTemplateRows(rows);
+    const nextSelectedTemplateId = resolveSelectedTemplateId(rows, selectedTemplateId);
+    setSelectedTemplateId(nextSelectedTemplateId);
+    if (!nextSelectedTemplateId) {
+      setTemplateQuestions([]);
+      setTemplateQuestionsError('');
+    }
     setError('');
     return rows;
-  }, []);
+  }, [selectedTemplateId]);
 
   const loadTemplateQuestions = useCallback(async (templateId: string): Promise<TemplateQuestionVm[]> => {
     const rows = await loadGalleryWithRetry(() => getTemplateQuestions(templateId));
@@ -1479,10 +1493,7 @@ export default function App() {
 
   const refreshTemplateLibrary = useCallback(async (preferredTemplateId?: string): Promise<TemplateChecklistVm[]> => {
     const rows = await loadTemplates();
-    const nextSelectedTemplateId = rows.find((item) => item.id === preferredTemplateId)?.id
-      ?? rows.find((item) => item.id === selectedTemplateId)?.id
-      ?? rows[0]?.id
-      ?? '';
+    const nextSelectedTemplateId = resolveSelectedTemplateId(rows, selectedTemplateId, preferredTemplateId);
     setSelectedTemplateId(nextSelectedTemplateId);
     if (!nextSelectedTemplateId) {
       setTemplateQuestions([]);
@@ -1493,6 +1504,7 @@ export default function App() {
 
   const openPlan = useCallback(async (plan: PlanVm, sync = true, replace = false, nextTab: PlanDetailsTab = 'checklists') => {
     setSelectedPlan(plan);
+    setPlanDetailsDraft(createPlanDetailsDraft(plan));
     setSelectedChecklist(undefined);
     setView('plan-details');
     setPlanTab(nextTab);
@@ -1687,21 +1699,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (templateRows.length === 0) {
-      setSelectedTemplateId('');
-      setTemplateQuestions([]);
-      setTemplateQuestionsError('');
-      return;
-    }
-
-    const hasCurrentSelection = templateRows.some((item) => item.id === selectedTemplateId);
-    if (!hasCurrentSelection) {
-      setSelectedTemplateId(templateRows[0]?.id ?? '');
-    }
-  }, [selectedTemplateId, templateRows]);
-
-  useEffect(() => {
-    if ((view !== 'template-library' && !isChecklistTemplatePickerOpen) || !selectedTemplateId) {
+    if ((view !== 'template-library' && !isChecklistTemplatePickerOpen) || !effectiveSelectedTemplateId) {
       return;
     }
 
@@ -1711,7 +1709,7 @@ export default function App() {
       setTemplateQuestionsLoading(true);
       setTemplateQuestionsError('');
       try {
-        const rows = await loadTemplateQuestions(selectedTemplateId);
+        const rows = await loadTemplateQuestions(effectiveSelectedTemplateId);
         if (!isCancelled) {
           setTemplateQuestions(rows);
         }
@@ -1719,7 +1717,7 @@ export default function App() {
         if (!isCancelled) {
           setTemplateQuestions([]);
           setTemplateQuestionsError(templateQuestionError instanceof Error ? templateQuestionError.message : String(templateQuestionError));
-          trackError('template.questions.load', templateQuestionError, { templateId: selectedTemplateId });
+          trackError('template.questions.load', templateQuestionError, { templateId: effectiveSelectedTemplateId });
         }
       } finally {
         if (!isCancelled) {
@@ -1733,7 +1731,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [isChecklistTemplatePickerOpen, loadTemplateQuestions, selectedTemplateId, view]);
+  }, [effectiveSelectedTemplateId, isChecklistTemplatePickerOpen, loadTemplateQuestions, view]);
 
   const onOpenChecklistTemplatePicker = useCallback(async () => {
     setError('');
@@ -1741,14 +1739,14 @@ export default function App() {
     setIsChecklistTemplatePickerOpen(true);
 
     if (templateRows.length > 0) {
-      setSelectedTemplateId((current) => current || templateRows[0]?.id || '');
+      setSelectedTemplateId((current) => resolveSelectedTemplateId(templateRows, current));
       return;
     }
 
     try {
       setLoading(true);
       const rows = await loadTemplates();
-      setSelectedTemplateId((current) => current || rows[0]?.id || '');
+      setSelectedTemplateId((current) => resolveSelectedTemplateId(rows, current));
     } catch (templateLoadError) {
       const message = templateLoadError instanceof Error ? templateLoadError.message : String(templateLoadError);
       setError(message);
@@ -1842,9 +1840,9 @@ export default function App() {
       setSelectedTemplateIds((current) => current.filter((id) => id !== template.id));
       trackFlow('templateChecklist.delete', { templateChecklistId: template.id });
       const remainingTemplates = await refreshTemplateLibrary(
-        template.id === selectedTemplateId
+        template.id === effectiveSelectedTemplateId
           ? templateRows.find((item) => item.id !== template.id)?.id
-          : selectedTemplateId,
+          : effectiveSelectedTemplateId,
       );
       if (remainingTemplates.length === 0) {
         setTemplateQuestions([]);
@@ -1855,7 +1853,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [refreshTemplateLibrary, selectedTemplateId, templateRows]);
+  }, [effectiveSelectedTemplateId, refreshTemplateLibrary, templateRows]);
 
   const onSaveTemplateQuestion = useCallback(async () => {
     if (!selectedTemplate || !templateQuestionDraft.questionText.trim()) {
@@ -3054,7 +3052,7 @@ export default function App() {
                 error={error}
                 hasSelectedPlan={Boolean(selectedPlan)}
                 templateRows={templateRows}
-                selectedTemplateId={selectedTemplateId}
+                selectedTemplateId={effectiveSelectedTemplateId}
                 selectedTemplateIds={selectedTemplateIds}
                 selectedTemplate={selectedTemplate}
                 templateQuestions={templateQuestions}
@@ -3351,7 +3349,7 @@ export default function App() {
                 noOptionsLabel="No template checklists available"
                 options={templateRows.map((template) => ({ value: template.id, label: template.name }))}
                 placeholder="Search and select a template checklist"
-                selectedValue={selectedTemplateId || undefined}
+                selectedValue={effectiveSelectedTemplateId || undefined}
                 onSelect={(value) => {
                   if (value) {
                     setSelectedTemplateId(value);
