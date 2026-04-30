@@ -66,6 +66,24 @@ const useStyles = makeStyles({
       maxHeight: 'calc(100dvh - 24px)',
     },
   },
+  dialogSurfaceConfirm: {
+    width: 'min(480px, calc(100vw - 32px))',
+    '@media (max-width: 700px)': {
+      width: 'calc(100vw - 24px)',
+    },
+  },
+  dialogSurfaceForm: {
+    width: 'min(720px, calc(100vw - 32px))',
+    '@media (max-width: 700px)': {
+      width: 'calc(100vw - 24px)',
+    },
+  },
+  dialogSurfaceWide: {
+    width: 'min(960px, calc(100vw - 32px))',
+    '@media (max-width: 700px)': {
+      width: 'calc(100vw - 24px)',
+    },
+  },
   dialogLayout: {
     display: 'grid',
     gridTemplateRows: 'auto minmax(0, 1fr) auto',
@@ -80,7 +98,7 @@ const useStyles = makeStyles({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalM}`,
+    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM} 0`,
   },
   dialogTitle: {
     margin: 0,
@@ -104,7 +122,7 @@ const useStyles = makeStyles({
   dialogContent: {
     minHeight: 0,
     overflowY: 'auto',
-    padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+    padding: `0 ${tokens.spacingHorizontalM} ${tokens.spacingVerticalS}`,
   },
   dialogFooter: {
     display: 'flex',
@@ -113,7 +131,7 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
     flexWrap: 'nowrap',
     overflowX: 'auto',
-    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalM} ${tokens.spacingVerticalS}`,
   },
   dialogFooterItem: {
     flex: '0 0 auto',
@@ -123,6 +141,10 @@ const useStyles = makeStyles({
   },
   searchableComboboxOptionMeta: {
     color: tokens.colorNeutralForeground3,
+  },
+  searchableComboboxListbox: {
+    maxHeight: 'min(40vh, 20rem)',
+    overflowY: 'auto',
   },
   galleryListItem: {
     boxSizing: 'border-box',
@@ -137,7 +159,6 @@ const useStyles = makeStyles({
     },
   },
   rowCard: {
-    cursor: 'pointer',
     outlineOffset: '2px',
     borderLeftWidth: '5px',
     borderLeftStyle: 'solid',
@@ -147,6 +168,9 @@ const useStyles = makeStyles({
     '@media (max-width: 700px)': {
       borderRadius: tokens.borderRadiusMedium,
     },
+  },
+  rowCardInteractive: {
+    cursor: 'pointer',
   },
   rowCardBody: {
     display: 'grid',
@@ -536,10 +560,16 @@ export function AppDialog(props: {
   onClose: () => void;
   children: ReactNode;
   actions?: ReactNode;
+  size?: 'confirm' | 'form' | 'wide';
   surfaceClassName?: string;
   contentClassName?: string;
 }): ReactNode {
   const styles = useStyles();
+  const sizeClassName = props.size === 'confirm'
+    ? styles.dialogSurfaceConfirm
+    : props.size === 'wide'
+      ? styles.dialogSurfaceWide
+      : styles.dialogSurfaceForm;
 
   return (
     <Dialog
@@ -551,7 +581,7 @@ export function AppDialog(props: {
         }
       }}
     >
-      <DialogSurface className={mergeClasses(styles.dialogSurface, props.surfaceClassName)}>
+      <DialogSurface className={mergeClasses(styles.dialogSurface, sizeClassName, props.surfaceClassName)}>
         <div className={styles.dialogLayout}>
           <div className={styles.dialogHeader}>
             <div className={styles.dialogTitle}>{props.title}</div>
@@ -598,6 +628,8 @@ type SearchableOption = {
 export function SearchableCombobox(props: {
   ariaLabel?: string;
   disabled?: boolean;
+  inlinePopup?: boolean;
+  listboxClassName?: string;
   noOptionsLabel?: string;
   options: SearchableOption[];
   placeholder?: string;
@@ -621,9 +653,10 @@ export function SearchableCombobox(props: {
   return (
     <Combobox
       freeform
-      inlinePopup
+      inlinePopup={props.inlinePopup ?? true}
       aria-label={props.ariaLabel}
       disabled={props.disabled}
+      listbox={{ className: mergeClasses(styles.searchableComboboxListbox, props.listboxClassName) }}
       placeholder={props.placeholder}
       selectedOptions={props.selectedValue ? [props.selectedValue] : []}
       value={inputValue}
@@ -715,22 +748,27 @@ export function GalleryCard(props: {
   footer?: ReactNode;
 }): ReactNode {
   const styles = useStyles();
+  const isInteractive = Boolean(props.onClick);
   const accentColor = props.accentKind
     ? getCardAccentColor(props.accentKind, props.accentValue ?? '')
     : (props.accentColor ?? tokens.colorNeutralStroke2);
 
   return (
     <Card
-      className={styles.rowCard}
+      className={mergeClasses(styles.rowCard, isInteractive && styles.rowCardInteractive)}
       style={{ borderLeftColor: accentColor }}
       onClick={props.onClick}
       onKeyDown={(event) => {
+        if (!isInteractive) {
+          return;
+        }
+
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           props.onClick?.();
         }
       }}
-      tabIndex={0}
+      tabIndex={isInteractive ? 0 : -1}
       appearance="filled-alternative"
       size="small"
     >

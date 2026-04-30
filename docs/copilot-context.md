@@ -79,7 +79,7 @@ Edit/interaction locks currently enforced:
 
 - Plan metadata editable only in Draft, and in Plan before plan approval
 - Checklist structure editable only in Draft, and in Plan before plan approval
-- Team editable through Execution; locked from Approval onward
+- Team editable through Approval; locked in Completion and after final sign off
 - Question answering enabled only after Plan approval and during Execution; also locked when a checklist is already complete
 - Deficiency creation allowed only from a `No` response during Execution
 - Existing deficiencies may still be edited in Approval and Completion until final sign off; closed deficiencies are locked
@@ -87,14 +87,15 @@ Edit/interaction locks currently enforced:
 ## Screens And Tabs
 
 - `PlansScreen`: searchable and filterable plan gallery with mobile filter drawer
-- `PlanDetailsScreen`: summary, lifecycle rail, and tabs for details, checklists, deficiencies, approvals, and team
-- `ChecklistDetailsScreen`: questions, details, and deficiencies tabs; supports swipe-based mobile answer staging
+- `PlanDetailsScreen`: summary, lifecycle rail, and tabs for details, checklists, deficiencies, approvals, and team; existing team member rows open an add/edit/delete role dialog
+- `ChecklistDetailsScreen`: questions, details, and deficiencies tabs; supports swipe-based mobile answer staging and defers question-linked deficiency creates/updates/deletes until the checklist save action is confirmed
 - `TemplateLibraryScreen`: template checklist and template question management plus copy-to-plan flow
 
 ## UI Conventions
 
 - Shared primitives are exported from `src/components/ui.tsx`
 - Reusable building blocks include `SectionPanel`, `DataState`, `ResponsiveButton`, `AppDialog`, `RowCard`, `GalleryCard`, `VirtualizedList`, and `SearchableCombobox`
+- `AppDialog` now standardizes dialog sizing with shared `confirm`, `form`, and `wide` variants for responsive modal layouts
 - Status/phase badges use `Pill`; accent colors come from shared token utilities
 - App shell uses Fluent `makeStyles` plus `src/index.css`
 - Mobile-specific layout logic is common in plan and checklist detail headers
@@ -107,6 +108,7 @@ Edit/interaction locks currently enforced:
 ## Current Constraints For Future Prompts
 
 - `src/App.tsx` is still the main stateful composition root; avoid assuming feature ownership is fully split across screen containers
+- Checklist question response staging and question-linked deficiency staging are both orchestrated in `src/App.tsx`; checklist-linked deficiency Dataverse writes are deferred until the checklist save flow runs
 - Template access is not role-gated in current app code: `hasTemplateAccess()` returns `true`
 - Template empty-state copy still says `No templates available for your role/site`, but repository loading does not filter templates by current user in current code
 - Lifecycle behavior is implemented in app code and covered by `src/app/lifecycleTransitions.test.ts`

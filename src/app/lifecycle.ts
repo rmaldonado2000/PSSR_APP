@@ -340,7 +340,8 @@ export function isTeamEditable(plan: PlanVm, approvals: ApprovalVm[]): boolean {
 
   return plan.stageCode === PLAN_STAGE_DRAFT
     || plan.stageCode === PLAN_STAGE_PLAN
-    || plan.stageCode === PLAN_STAGE_EXECUTION;
+    || plan.stageCode === PLAN_STAGE_EXECUTION
+    || plan.stageCode === PLAN_STAGE_APPROVAL;
 }
 
 export function isQuestionAnsweringEnabled(

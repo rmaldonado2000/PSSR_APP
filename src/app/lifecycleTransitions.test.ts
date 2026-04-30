@@ -166,6 +166,11 @@ describe('lifecycle schema guards', () => {
     expect(canEditDeficiency(plan, approvals, deficiency)).toBe(false);
     expect(isTeamEditable(plan, approvals)).toBe(false);
   });
+
+  it('allows team editing through Approval and locks it in Completion before final sign off', () => {
+    expect(isTeamEditable(createPlan({ stageCode: PLAN_STAGE_APPROVAL }), [])).toBe(true);
+    expect(isTeamEditable(createPlan({ stageCode: PLAN_STAGE_COMPLETION }), [])).toBe(false);
+  });
 });
 
 describe('lifecycle transitions', () => {

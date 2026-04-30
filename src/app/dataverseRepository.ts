@@ -1020,6 +1020,12 @@ export async function updateDeficiency(deficiencyId: string, payload: Partial<{
   });
 }
 
+export async function deleteDeficiency(deficiencyId: string): Promise<void> {
+  await withMutationRetry(async () => {
+    await Crc07_pssr_deficienciesService.delete(deficiencyId);
+  });
+}
+
 export async function getApprovalsByPlan(planId: string): Promise<ApprovalVm[]> {
   let rows: Awaited<ReturnType<typeof Crc07_pssr_approvalsService.getAll>>['data'] = [];
   let lastApprovalError: unknown;
@@ -1199,6 +1205,22 @@ export async function createTeamMember(payload: {
 
   await withMutationRetry(async () => {
     await Crc07_pssr_team_membersService.create(createPayload as unknown as Parameters<typeof Crc07_pssr_team_membersService.create>[0]);
+  });
+}
+
+export async function updateTeamMember(teamMemberId: string, payload: Partial<{
+  roleCode: number;
+}>): Promise<void> {
+  await withMutationRetry(async () => {
+    await Crc07_pssr_team_membersService.update(teamMemberId, {
+      crc07_roles: payload.roleCode as never,
+    });
+  });
+}
+
+export async function deleteTeamMember(teamMemberId: string): Promise<void> {
+  await withMutationRetry(async () => {
+    await Crc07_pssr_team_membersService.delete(teamMemberId);
   });
 }
 

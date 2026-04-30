@@ -25,6 +25,8 @@ import {
   createTemplateChecklist,
   createTemplateQuestion,
   createDeficiency,
+  deleteDeficiency,
+  deleteTeamMember,
   getCurrentUserProfile,
   getMocLookupOptions,
   createPlan,
@@ -51,6 +53,7 @@ import {
   updateChecklist,
   updatePlan,
   updateQuestionResponse,
+  updateTeamMember,
 } from './app/dataverseRepository';
 import {
   APPROVAL_STATUS_APPROVED,
@@ -58,6 +61,7 @@ import {
   canCreateDeficiency,
   canEditDeficiency,
   DEFICIENCY_STATUS_IN_PROGRESS,
+  DEFICIENCY_STATUS_OPEN,
   findLatestApproval,
   getChecklistCompleteErrors,
   getPlanPhaseCommandState,
@@ -71,6 +75,7 @@ import {
   PLAN_STAGE_APPROVAL,
   PLAN_STAGE_COMPLETION,
   PLAN_STAGE_PLAN,
+  QUESTION_RESPONSE_NO,
   TEAM_ROLE_PSSR_LEAD,
 } from './app/lifecycle';
 import {
@@ -527,8 +532,8 @@ const useStyles = makeStyles({
   },
   modalFields: {
     display: 'grid',
-    gap: tokens.spacingVerticalM,
-    marginTop: tokens.spacingVerticalM,
+    gap: tokens.spacingVerticalS,
+    marginTop: 0,
   },
   templatePickerLayout: {
     display: 'grid',
@@ -650,6 +655,11 @@ type DeficiencyDraft = {
   generalComment?: string;
 };
 
+type StagedDeficiencyVm = DeficiencyVm & {
+  isNew: boolean;
+  isDirty: boolean;
+};
+
 type TemplateChecklistDraft = {
   id?: string;
   name: string;
@@ -667,9 +677,16 @@ type TemplateQuestionDraft = {
 };
 
 type TeamMemberDraft = {
+  id?: string;
   memberId?: string;
   memberName: string;
   roleCode?: number;
+};
+
+type PendingDeficiencyRemoval = {
+  questionId: string;
+  nextResponseCode: number;
+  hasUnsavedEdits: boolean;
 };
 
 function getChecklistHeaderIcon(statusLabel: string | undefined) {
@@ -775,11 +792,17 @@ function createTemplateQuestionDraft(
   };
 }
 
-function createTeamMemberDraft(): TeamMemberDraft {
+function createTeamMemberDraft(member?: TeamMemberVm): TeamMemberDraft {
   return {
-    memberName: '',
-    roleCode: undefined,
+    id: member?.id,
+    memberId: member?.memberId,
+    memberName: member?.name ?? '',
+    roleCode: member?.roleCode,
   };
+}
+
+function createStagedDeficiencyId(): string {
+  return `staged-def-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 }
 
 function moveQuestionIdToSequence(
@@ -934,10 +957,14 @@ export default function App() {
   const [isSavingQuestionResponses, setIsSavingQuestionResponses] = useState<boolean>(false);
   const [isPendingQuestionDialogOpen, setIsPendingQuestionDialogOpen] = useState<boolean>(false);
   const [deficiencies, setDeficiencies] = useState<DeficiencyVm[]>([]);
+  const [stagedDeficiencies, setStagedDeficiencies] = useState<StagedDeficiencyVm[]>([]);
+  const [stagedDeletedDeficiencyIds, setStagedDeletedDeficiencyIds] = useState<string[]>([]);
+  const [pendingDeficiencyRemoval, setPendingDeficiencyRemoval] = useState<PendingDeficiencyRemoval>();
   const [approvals, setApprovals] = useState<ApprovalVm[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMemberVm[]>([]);
   const [isTeamMemberOpen, setIsTeamMemberOpen] = useState<boolean>(false);
   const [teamMemberDraft, setTeamMemberDraft] = useState<TeamMemberDraft>(createTeamMemberDraft());
+  const [isTeamMemberDeleteDialogOpen, setIsTeamMemberDeleteDialogOpen] = useState<boolean>(false);
   const [userLookupOptions, setUserLookupOptions] = useState<PlanLookupOptionVm[]>([]);
   const [userLookupLoading, setUserLookupLoading] = useState<boolean>(false);
 
@@ -1000,6 +1027,88 @@ export default function App() {
   const deficiencyStatusOptions = useMemo(() => enumOptions(optionSets.deficiencyStatus), []);
   const deficiencyCategoryOptions = useMemo(() => enumOptions(optionSets.deficiencyCategory), []);
   const isAcceptedCategoryEnabled = deficiencyDraft.statusCode === DEFICIENCY_STATUS_IN_PROGRESS;
+  const isChecklistDeficiencyStagingContext = view === 'checklist-details' && Boolean(selectedPlan && selectedChecklist);
+
+  const toDeficiencyVm = useCallback((draft: DeficiencyDraft, metadata?: Partial<DeficiencyVm>): DeficiencyVm => ({
+    id: draft.id ?? metadata?.id ?? createStagedDeficiencyId(),
+    deficiencyId: metadata?.deficiencyId,
+    createdOn: metadata?.createdOn,
+    planId: metadata?.planId,
+    checklistId: metadata?.checklistId,
+    checklistName: metadata?.checklistName,
+    questionId: metadata?.questionId,
+    questionName: metadata?.questionName,
+    name: draft.name,
+    initialCategoryCode: draft.initialCategoryCode,
+    initialCategoryLabel: deficiencyCategoryOptions.find((item) => item.key === draft.initialCategoryCode)?.label,
+    acceptedCategoryCode: draft.acceptedCategoryCode,
+    acceptedCategoryLabel: deficiencyCategoryOptions.find((item) => item.key === draft.acceptedCategoryCode)?.label,
+    statusCode: draft.statusCode,
+    statusLabel: deficiencyStatusOptions.find((item) => item.key === draft.statusCode)?.label,
+    generalComment: draft.generalComment,
+    closeoutComment: metadata?.closeoutComment,
+    closedById: metadata?.closedById,
+    closedOn: metadata?.closedOn,
+  }), [deficiencyCategoryOptions, deficiencyStatusOptions]);
+
+  const stagedDeficiencyById = useMemo(
+    () => new Map(stagedDeficiencies.map((item) => [item.id, item])),
+    [stagedDeficiencies],
+  );
+  const effectiveDeficiencies = useMemo(() => {
+    const deletedIds = new Set(stagedDeletedDeficiencyIds);
+    const persistedRows = deficiencies
+      .filter((item) => !deletedIds.has(item.id))
+      .map((item) => stagedDeficiencyById.get(item.id) ?? item);
+    const stagedNewRows = stagedDeficiencies.filter((item) => item.isNew);
+    return [...stagedNewRows, ...persistedRows];
+  }, [deficiencies, stagedDeficiencies, stagedDeficiencyById, stagedDeletedDeficiencyIds]);
+
+  const getQuestionDeficiencies = useCallback((questionId: string, source = effectiveDeficiencies): DeficiencyVm[] => {
+    return source.filter((item) => item.questionId === questionId);
+  }, [effectiveDeficiencies]);
+
+  const removeQuestionDeficiencyDeletes = useCallback((questionId: string) => {
+    const relatedPersistedIds = deficiencies
+      .filter((item) => item.questionId === questionId)
+      .map((item) => item.id);
+    if (relatedPersistedIds.length === 0) {
+      return;
+    }
+
+    setStagedDeletedDeficiencyIds((current) => current.filter((item) => !relatedPersistedIds.includes(item)));
+  }, [deficiencies]);
+
+  const clearQuestionDeficiencyStaging = useCallback((questionId: string, markPersistedForDelete: boolean) => {
+    const relatedPersistedIds = deficiencies
+      .filter((item) => item.questionId === questionId)
+      .map((item) => item.id);
+
+    setStagedDeficiencies((current) => current.filter((item) => item.questionId !== questionId));
+    setStagedDeletedDeficiencyIds((current) => {
+      const withoutExisting = current.filter((item) => !relatedPersistedIds.includes(item));
+      if (!markPersistedForDelete || relatedPersistedIds.length === 0) {
+        return withoutExisting;
+      }
+
+      return Array.from(new Set([...withoutExisting, ...relatedPersistedIds]));
+    });
+  }, [deficiencies]);
+
+  const applyQuestionResponseLocally = useCallback((question: QuestionVm, responseCode: number) => {
+    const responseLabel = optionSets.questionResponse[responseCode as keyof typeof optionSets.questionResponse];
+    setQuestions((current) => current.map((item) => (
+      item.id === question.id
+        ? { ...item, responseCode, responseLabel }
+        : item
+    )));
+    trackFlow('question.response.staged', { questionId: question.id, responseCode });
+  }, []);
+
+  const pendingDeficiencyChangeCount = useMemo(
+    () => stagedDeficiencies.filter((item) => item.isDirty).length + stagedDeletedDeficiencyIds.length,
+    [stagedDeficiencies, stagedDeletedDeficiencyIds],
+  );
 
   const hasPlanDetailsChanges = selectedPlan !== undefined && (
     selectedPlan.name !== planDetailsDraft.name
@@ -1012,7 +1121,8 @@ export default function App() {
     () => questions.filter((question) => savedQuestionResponses[question.id] !== question.responseCode).length,
     [questions, savedQuestionResponses],
   );
-  const hasPendingQuestionChanges = view === 'checklist-details' && pendingQuestionResponseCount > 0;
+  const pendingChecklistChangeCount = pendingQuestionResponseCount + pendingDeficiencyChangeCount;
+  const hasPendingQuestionChanges = view === 'checklist-details' && pendingChecklistChangeCount > 0;
   const filteredPlans = useMemo(() => {
     return plans.filter((plan) => {
       const siteMatch = siteFilter === undefined || plan.siteCode === siteFilter;
@@ -1039,17 +1149,17 @@ export default function App() {
   );
   const associatedQuestionDeficiencies = useMemo(
     () => deficiencyQuestionId
-      ? deficiencies.filter((item) => item.questionId === deficiencyQuestionId)
+      ? effectiveDeficiencies.filter((item) => item.questionId === deficiencyQuestionId)
       : [],
-    [deficiencies, deficiencyQuestionId],
+    [deficiencyQuestionId, effectiveDeficiencies],
   );
   const activeDeficiencyQuestion = useMemo(
     () => questions.find((item) => item.id === deficiencyQuestionId),
     [deficiencyQuestionId, questions],
   );
   const activeDeficiencyRecord = useMemo(
-    () => deficiencies.find((item) => item.id === deficiencyDraft.id),
-    [deficiencies, deficiencyDraft.id],
+    () => effectiveDeficiencies.find((item) => item.id === deficiencyDraft.id),
+    [deficiencyDraft.id, effectiveDeficiencies],
   );
   const selectedPlanLifecycleContext = useMemo(() => {
     if (!selectedPlan) {
@@ -1060,11 +1170,11 @@ export default function App() {
       plan: selectedPlan,
       approvals,
       checklists,
-      deficiencies,
+      deficiencies: effectiveDeficiencies,
       teamMembers,
       currentUser,
     };
-  }, [approvals, checklists, currentUser, deficiencies, selectedPlan, teamMembers]);
+  }, [approvals, checklists, currentUser, effectiveDeficiencies, selectedPlan, teamMembers]);
   const lifecycleDependencies = useMemo(() => ({
     updatePlan,
     updateChecklist,
@@ -1113,8 +1223,8 @@ export default function App() {
       return [] as string[];
     }
 
-    return getChecklistCompleteErrors(questions, deficiencies, selectedChecklist.id);
-  }, [deficiencies, questions, selectedChecklist]);
+    return getChecklistCompleteErrors(questions, effectiveDeficiencies, selectedChecklist.id);
+  }, [effectiveDeficiencies, questions, selectedChecklist]);
   const canCompleteCurrentChecklist = Boolean(
     selectedChecklist
     && selectedChecklist.statusCode !== CHECKLIST_STATUS_COMPLETE
@@ -1622,6 +1732,9 @@ export default function App() {
           : undefined,
       };
     }));
+    setStagedDeficiencies([]);
+    setStagedDeletedDeficiencyIds([]);
+    setPendingDeficiencyRemoval(undefined);
     setError('');
   }, [savedQuestionResponses]);
 
@@ -2191,7 +2304,7 @@ export default function App() {
   }, []);
 
   const onOpenDeficiencyModal = useCallback((question?: QuestionVm, deficiency?: DeficiencyVm) => {
-    if (!deficiency && (!question || question.responseCode !== 507650001)) {
+    if (!deficiency && (!question || question.responseCode !== QUESTION_RESPONSE_NO)) {
       setError('Deficiencies can only be created from checklist questions answered No.');
       return;
     }
@@ -2205,14 +2318,14 @@ export default function App() {
       name: deficiency?.name ?? '',
       initialCategoryCode: deficiency?.initialCategoryCode ?? 507650001,
       acceptedCategoryCode: deficiency?.acceptedCategoryCode,
-      statusCode: deficiency?.statusCode ?? 507650000,
+      statusCode: deficiency?.statusCode ?? DEFICIENCY_STATUS_OPEN,
       generalComment: deficiency?.generalComment ?? question?.comment ?? '',
     });
     setIsDeficiencyOpen(true);
   }, [selectedChecklist?.id]);
 
   const onOpenQuestionDeficiencyPopout = useCallback((question: QuestionVm) => {
-    const relatedDeficiencies = deficiencies.filter((item) => item.questionId === question.id);
+    const relatedDeficiencies = getQuestionDeficiencies(question.id);
 
     if (relatedDeficiencies.length > 1) {
       setError('');
@@ -2224,7 +2337,7 @@ export default function App() {
     }
 
     onOpenDeficiencyModal(question, relatedDeficiencies[0]);
-  }, [deficiencies, onOpenDeficiencyModal, selectedChecklist?.id]);
+  }, [getQuestionDeficiencies, onOpenDeficiencyModal, selectedChecklist?.id]);
 
   const onEditQuestionDeficiency = useCallback((deficiency: DeficiencyVm) => {
     const sourceQuestion = questions.find((item) => item.id === deficiency.questionId);
@@ -2317,20 +2430,56 @@ export default function App() {
       return;
     }
 
-    const responseLabel = optionSets.questionResponse[responseCode as keyof typeof optionSets.questionResponse];
-
-    setQuestions((current) => current.map((item) => (
-      item.id === question.id
-        ? { ...item, responseCode, responseLabel }
-        : item
-    )));
-
-    if (responseLabel === 'No') {
-      onOpenQuestionDeficiencyPopout({ ...question, responseCode, responseLabel });
+    if (responseCode === QUESTION_RESPONSE_NO) {
+      removeQuestionDeficiencyDeletes(question.id);
+      applyQuestionResponseLocally(question, responseCode);
+      onOpenQuestionDeficiencyPopout({
+        ...question,
+        responseCode,
+        responseLabel: optionSets.questionResponse[QUESTION_RESPONSE_NO],
+      });
+      return;
     }
 
-    trackFlow('question.response.staged', { questionId: question.id, responseCode });
-  }, [approvals, onOpenQuestionDeficiencyPopout, selectedChecklist, selectedPlan]);
+    if (question.responseCode === QUESTION_RESPONSE_NO) {
+      const persistedDeficiencies = deficiencies.filter((item) => item.questionId === question.id);
+      const stagedQuestionDeficiencies = stagedDeficiencies.filter((item) => item.questionId === question.id);
+      const hasUnsavedEdits = stagedQuestionDeficiencies.some((item) => item.isDirty);
+
+      if (persistedDeficiencies.length > 0 || hasUnsavedEdits) {
+        setPendingDeficiencyRemoval({
+          questionId: question.id,
+          nextResponseCode: responseCode,
+          hasUnsavedEdits,
+        });
+        return;
+      }
+
+      clearQuestionDeficiencyStaging(question.id, false);
+    }
+
+    applyQuestionResponseLocally(question, responseCode);
+  }, [approvals, applyQuestionResponseLocally, clearQuestionDeficiencyStaging, deficiencies, onOpenQuestionDeficiencyPopout, removeQuestionDeficiencyDeletes, selectedChecklist, selectedPlan, stagedDeficiencies]);
+
+  const onCancelPendingDeficiencyRemoval = useCallback(() => {
+    setPendingDeficiencyRemoval(undefined);
+  }, []);
+
+  const onConfirmPendingDeficiencyRemoval = useCallback(() => {
+    if (!pendingDeficiencyRemoval) {
+      return;
+    }
+
+    const question = questions.find((item) => item.id === pendingDeficiencyRemoval.questionId);
+    if (!question) {
+      setPendingDeficiencyRemoval(undefined);
+      return;
+    }
+
+    clearQuestionDeficiencyStaging(question.id, true);
+    applyQuestionResponseLocally(question, pendingDeficiencyRemoval.nextResponseCode);
+    setPendingDeficiencyRemoval(undefined);
+  }, [applyQuestionResponseLocally, clearQuestionDeficiencyStaging, pendingDeficiencyRemoval, questions]);
 
   const onSaveQuestionResponses = useCallback(async (): Promise<boolean> => {
     if (!selectedPlan || !selectedChecklist || !isQuestionAnsweringEnabled(selectedPlan, approvals, selectedChecklist)) {
@@ -2338,45 +2487,113 @@ export default function App() {
     }
 
     const changedQuestions = questions.filter((question) => savedQuestionResponses[question.id] !== question.responseCode);
-    if (changedQuestions.length === 0) {
+    const dirtyStagedDeficiencies = stagedDeficiencies.filter((item) => item.isDirty);
+    if (changedQuestions.length === 0 && dirtyStagedDeficiencies.length === 0 && stagedDeletedDeficiencyIds.length === 0) {
       return true;
+    }
+
+    const invalidDraft = dirtyStagedDeficiencies.find((item) => item.isNew && (!item.name.trim() || !item.generalComment?.trim() || item.initialCategoryCode === undefined));
+    if (invalidDraft) {
+      setError('Complete the staged deficiency details before saving checklist changes.');
+      return false;
+    }
+
+    const blockedCreate = dirtyStagedDeficiencies.find((item) => {
+      if (!item.isNew) {
+        return false;
+      }
+
+      const relatedQuestion = questions.find((question) => question.id === item.questionId);
+      return !canCreateDeficiency(selectedPlan, approvals, relatedQuestion);
+    });
+    if (blockedCreate) {
+      setError('Deficiencies can only be created from a question answered No during Execution.');
+      return false;
+    }
+
+    const blockedUpdate = dirtyStagedDeficiencies.find((item) => {
+      if (item.isNew) {
+        return false;
+      }
+
+      const persistedItem = deficiencies.find((deficiency) => deficiency.id === item.id);
+      return persistedItem ? !canEditDeficiency(selectedPlan, approvals, persistedItem) : false;
+    });
+    if (blockedUpdate) {
+      setError('One or more deficiencies are read-only in the current lifecycle phase.');
+      return false;
+    }
+
+    const blockedDelete = stagedDeletedDeficiencyIds.find((id) => {
+      const persistedItem = deficiencies.find((deficiency) => deficiency.id === id);
+      return persistedItem ? !canEditDeficiency(selectedPlan, approvals, persistedItem) : false;
+    });
+    if (blockedDelete) {
+      setError('One or more deficiencies cannot be removed in the current lifecycle phase.');
+      return false;
     }
 
     setIsSavingQuestionResponses(true);
     setError('');
 
     try {
-      const results = await Promise.allSettled(changedQuestions.map(async (item) => {
-        await updateQuestionResponse(item.id, { responseCode: item.responseCode });
-        return item;
-      }));
+      if (changedQuestions.length > 0) {
+        await Promise.all(changedQuestions.map(async (item) => {
+          await updateQuestionResponse(item.id, { responseCode: item.responseCode });
+        }));
 
-      const savedItems = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
-      if (savedItems.length > 0) {
         setSavedQuestionResponses((current) => {
           const next = { ...current };
-          savedItems.forEach((item) => {
+          changedQuestions.forEach((item) => {
             next[item.id] = item.responseCode;
           });
           return next;
         });
         trackFlow('question.response.saved', {
           checklistId: selectedChecklist?.id,
-          savedCount: savedItems.length,
+          savedCount: changedQuestions.length,
         });
       }
 
-      const failedResult = results.find((result) => result.status === 'rejected');
-      if (failedResult && failedResult.status === 'rejected') {
-        const message = failedResult.reason instanceof Error ? failedResult.reason.message : String(failedResult.reason);
-        setError(message);
-        trackError('question.response.save', failedResult.reason, {
-          checklistId: selectedChecklist?.id,
-          attemptedCount: changedQuestions.length,
-          savedCount: savedItems.length,
+      const stagedCreates = dirtyStagedDeficiencies.filter((item) => item.isNew);
+      const stagedUpdates = dirtyStagedDeficiencies.filter((item) => !item.isNew);
+
+      await Promise.all(stagedCreates.map(async (item) => {
+        await createDeficiency({
+          planId: selectedPlan.id,
+          checklistId: item.checklistId,
+          questionId: item.questionId,
+          name: item.name,
+          initialCategoryCode: item.initialCategoryCode,
+          acceptedCategoryCode: item.acceptedCategoryCode,
+          statusCode: item.statusCode,
+          generalComment: item.generalComment,
         });
-        return false;
+      }));
+      await Promise.all(stagedUpdates.map(async (item) => {
+        await updateDeficiency(item.id, {
+          name: item.name,
+          initialCategoryCode: item.initialCategoryCode,
+          acceptedCategoryCode: item.acceptedCategoryCode,
+          statusCode: item.statusCode,
+          generalComment: item.generalComment,
+        });
+      }));
+      await Promise.all(stagedDeletedDeficiencyIds.map(async (id) => {
+        await deleteDeficiency(id);
+      }));
+
+      if (dirtyStagedDeficiencies.length > 0 || stagedDeletedDeficiencyIds.length > 0) {
+        trackFlow('checklist.deficiency.save', {
+          checklistId: selectedChecklist.id,
+          createCount: stagedCreates.length,
+          updateCount: stagedUpdates.length,
+          deleteCount: stagedDeletedDeficiencyIds.length,
+        });
       }
+
+      setStagedDeficiencies([]);
+      setStagedDeletedDeficiencyIds([]);
 
       if (selectedPlan?.id) {
         const nextChecklists = await loadPlanChildren(selectedPlan.id);
@@ -2403,10 +2620,18 @@ export default function App() {
       }
 
       return true;
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : String(saveError));
+      trackError('checklist.save', saveError, {
+        checklistId: selectedChecklist?.id,
+        questionCount: changedQuestions.length,
+        deficiencyCount: dirtyStagedDeficiencies.length + stagedDeletedDeficiencyIds.length,
+      });
+      return false;
     } finally {
       setIsSavingQuestionResponses(false);
     }
-  }, [approvals, lifecycleDependencies, loadPlanChildren, questions, refreshCurrentPlanState, savedQuestionResponses, selectedChecklist, selectedPlan, selectedPlanLifecycleContext]);
+  }, [approvals, deficiencies, lifecycleDependencies, loadPlanChildren, questions, refreshCurrentPlanState, savedQuestionResponses, selectedChecklist, selectedPlan, selectedPlanLifecycleContext, stagedDeficiencies, stagedDeletedDeficiencyIds]);
 
   const onDiscardQuestionChangesAndContinue = useCallback(async () => {
     onDiscardQuestionChanges();
@@ -2431,6 +2656,40 @@ export default function App() {
       setError(deficiencyDraft.id
         ? 'This deficiency is read-only in the current lifecycle phase.'
         : 'Deficiencies can only be created from a question answered No during Execution.');
+      return;
+    }
+
+    if (isChecklistDeficiencyStagingContext) {
+      const persistedItem = deficiencyDraft.id ? deficiencies.find((item) => item.id === deficiencyDraft.id) : undefined;
+      const nextEntry = toDeficiencyVm(deficiencyDraft, {
+        ...persistedItem,
+        planId: selectedPlan.id,
+        checklistId: deficiencyChecklistId || persistedItem?.checklistId,
+        questionId: deficiencyQuestionId || persistedItem?.questionId,
+      });
+      const isDirty = !persistedItem
+        || persistedItem.name !== nextEntry.name
+        || persistedItem.initialCategoryCode !== nextEntry.initialCategoryCode
+        || persistedItem.acceptedCategoryCode !== nextEntry.acceptedCategoryCode
+        || persistedItem.statusCode !== nextEntry.statusCode
+        || (persistedItem.generalComment ?? '') !== (nextEntry.generalComment ?? '');
+      const stagedEntry: StagedDeficiencyVm = {
+        ...nextEntry,
+        isNew: !persistedItem,
+        isDirty,
+      };
+
+      setStagedDeficiencies((current) => {
+        const next = current.filter((item) => item.id !== stagedEntry.id);
+        if (!stagedEntry.isNew && !stagedEntry.isDirty) {
+          return next;
+        }
+
+        return [stagedEntry, ...next];
+      });
+      setStagedDeletedDeficiencyIds((current) => current.filter((item) => item !== stagedEntry.id));
+      setError('');
+      onCloseDeficiencyPopout();
       return;
     }
 
@@ -2492,10 +2751,11 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [deficiencies, deficiencyCategoryOptions, deficiencyChecklistId, deficiencyDraft, deficiencyQuestionId, deficiencyStatusOptions, isDeficiencyDraftEditable, onCloseDeficiencyPopout, selectedPlan]);
+  }, [deficiencies, deficiencyCategoryOptions, deficiencyChecklistId, deficiencyDraft, deficiencyQuestionId, deficiencyStatusOptions, isChecklistDeficiencyStagingContext, isDeficiencyDraftEditable, onCloseDeficiencyPopout, selectedPlan, toDeficiencyVm]);
 
   const onCloseTeamMemberPopout = useCallback(() => {
     setIsTeamMemberOpen(false);
+    setIsTeamMemberDeleteDialogOpen(false);
     setTeamMemberDraft(createTeamMemberDraft());
   }, []);
 
@@ -2509,6 +2769,62 @@ export default function App() {
     setTeamMemberDraft(createTeamMemberDraft());
     setIsTeamMemberOpen(true);
   }, [canManageTeam]);
+
+  const onEditTeamMember = useCallback((member: TeamMemberVm) => {
+    if (!canManageTeam) {
+      setError('Team changes are locked in the current lifecycle phase.');
+      return;
+    }
+
+    setError('');
+    setTeamMemberDraft(createTeamMemberDraft(member));
+    setIsTeamMemberOpen(true);
+  }, [canManageTeam]);
+
+  const onOpenDeleteTeamMemberDialog = useCallback(() => {
+    if (!teamMemberDraft.id) {
+      return;
+    }
+
+    if (!canManageTeam) {
+      setError('Team changes are locked in the current lifecycle phase.');
+      return;
+    }
+
+    setIsTeamMemberDeleteDialogOpen(true);
+  }, [canManageTeam, teamMemberDraft.id]);
+
+  const onConfirmDeleteTeamMember = useCallback(async () => {
+    if (!selectedPlan || !teamMemberDraft.id) {
+      return;
+    }
+
+    if (!canManageTeam) {
+      setError('Team changes are locked in the current lifecycle phase.');
+      return;
+    }
+
+    const previousTeamMembers = teamMembers;
+    setTeamMembers((current) => current.filter((item) => item.id !== teamMemberDraft.id));
+
+    try {
+      setLoading(true);
+      setError('');
+      await deleteTeamMember(teamMemberDraft.id);
+      trackFlow('team-member.delete', { planId: selectedPlan.id, teamMemberId: teamMemberDraft.id });
+
+      const nextTeamMembers = await getTeamByPlan(selectedPlan.id);
+      setTeamMembers(nextTeamMembers);
+      onCloseTeamMemberPopout();
+    } catch (deleteError) {
+      setTeamMembers(previousTeamMembers);
+      setError(deleteError instanceof Error ? deleteError.message : String(deleteError));
+      trackError('team-member.delete', deleteError, { planId: selectedPlan.id, teamMemberId: teamMemberDraft.id });
+    } finally {
+      setLoading(false);
+      setIsTeamMemberDeleteDialogOpen(false);
+    }
+  }, [canManageTeam, onCloseTeamMemberPopout, selectedPlan, teamMemberDraft.id, teamMembers]);
 
   const planHeaderCommands = useMemo(() => {
     if (!selectedPlan || !selectedPlanCommandState) {
@@ -2605,9 +2921,14 @@ export default function App() {
       return;
     }
 
+    if (!canManageTeam) {
+      setError('Team changes are locked in the current lifecycle phase.');
+      return;
+    }
+
     const previousTeamMembers = teamMembers;
     const optimisticEntry: TeamMemberVm = {
-      id: `temp-team-${Date.now()}`,
+      id: teamMemberDraft.id ?? `temp-team-${Date.now()}`,
       planId: selectedPlan.id,
       memberId: teamMemberDraft.memberId,
       name: teamMemberDraft.memberName,
@@ -2615,18 +2936,31 @@ export default function App() {
       roleLabel: teamRoleOptions.find((item) => item.key === teamMemberDraft.roleCode)?.label,
     };
 
-    setTeamMembers((current) => [optimisticEntry, ...current]);
+    setTeamMembers((current) => {
+      if (!teamMemberDraft.id) {
+        return [optimisticEntry, ...current];
+      }
+
+      return current.map((item) => (item.id === teamMemberDraft.id ? optimisticEntry : item));
+    });
 
     try {
       setLoading(true);
       setError('');
-      await createTeamMember({
-        planId: selectedPlan.id,
-        memberId: teamMemberDraft.memberId,
-        memberName: teamMemberDraft.memberName,
-        roleCode: teamMemberDraft.roleCode,
-      });
-      trackFlow('team-member.create', { planId: selectedPlan.id, roleCode: teamMemberDraft.roleCode });
+      if (teamMemberDraft.id) {
+        await updateTeamMember(teamMemberDraft.id, {
+          roleCode: teamMemberDraft.roleCode,
+        });
+        trackFlow('team-member.update', { planId: selectedPlan.id, roleCode: teamMemberDraft.roleCode });
+      } else {
+        await createTeamMember({
+          planId: selectedPlan.id,
+          memberId: teamMemberDraft.memberId,
+          memberName: teamMemberDraft.memberName,
+          roleCode: teamMemberDraft.roleCode,
+        });
+        trackFlow('team-member.create', { planId: selectedPlan.id, roleCode: teamMemberDraft.roleCode });
+      }
 
       const nextTeamMembers = await getTeamByPlan(selectedPlan.id);
       setTeamMembers(nextTeamMembers);
@@ -2638,7 +2972,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [onCloseTeamMemberPopout, selectedPlan, teamMemberDraft, teamMembers, teamRoleOptions]);
+  }, [canManageTeam, onCloseTeamMemberPopout, selectedPlan, teamMemberDraft, teamMembers, teamRoleOptions]);
 
   const onCopyTemplates = useCallback(async () => {
     if (!selectedPlan || selectedTemplateIds.length === 0) {
@@ -3005,6 +3339,7 @@ export default function App() {
                 onOpenNewDeficiency={() => onOpenDeficiencyModal()}
                 onEditDeficiency={(deficiency) => onOpenDeficiencyModal(undefined, deficiency)}
                 onOpenAddTeamMember={onOpenTeamMemberPopout}
+                onEditTeamMember={onEditTeamMember}
               />
             )}
 
@@ -3015,10 +3350,10 @@ export default function App() {
                 selectedPlan={selectedPlan}
                 selectedChecklist={selectedChecklist}
                 questions={questions}
-                deficiencies={deficiencies}
+                deficiencies={effectiveDeficiencies}
                 responseOptions={responseOptions}
                 hasPendingChanges={hasPendingQuestionChanges}
-                pendingResponseCount={pendingQuestionResponseCount}
+                pendingResponseCount={pendingChecklistChangeCount}
                 isSavingResponses={isSavingQuestionResponses}
                 isQuestionAnsweringEnabled={isQuestionEditingEnabled}
                 questionAnsweringTitle={questionAnsweringTitle}
@@ -3037,6 +3372,7 @@ export default function App() {
                 }}
                 onAddDeficiency={(question) => onOpenDeficiencyModal(question)}
                 onOpenQuestionDeficiencies={onOpenQuestionDeficiencyPopout}
+                onEditDeficiency={onEditQuestionDeficiency}
                 isSummaryExpanded={isChecklistSummaryExpanded}
                 checklistTab={checklistTab}
                 onChecklistTabChange={(tab) => {
@@ -3121,9 +3457,9 @@ export default function App() {
       {isPendingQuestionDialogOpen && (
         <AppDialog
           open={isPendingQuestionDialogOpen}
-          title="Unsaved Responses"
+          title="Unsaved Changes"
           onClose={onStayOnChecklist}
-          surfaceClassName={styles.dialogSurfaceCompact}
+          size="confirm"
           actions={[
             <ResponsiveButton key="discard" appearance="subtle" icon={<Delete24Regular />} label="Discard Changes" onClick={() => { void onDiscardQuestionChangesAndContinue(); }} />,
             <ResponsiveButton key="save" appearance="primary" icon={<Save24Regular />} label={isSavingQuestionResponses ? 'Saving...' : 'Save and Close'} disabled={isSavingQuestionResponses} onClick={() => { void onSaveQuestionChangesAndContinue(); }} />,
@@ -3131,9 +3467,33 @@ export default function App() {
         >
           <div className={styles.unsavedResponsesBody}>
             <Text>
-              You have {pendingQuestionResponseCount} unsaved {pendingQuestionResponseCount === 1 ? 'response' : 'responses'} on this checklist.
+              You have {pendingChecklistChangeCount} unsaved {pendingChecklistChangeCount === 1 ? 'change' : 'changes'} on this checklist.
               Save before leaving, or discard the staged changes.
             </Text>
+          </div>
+        </AppDialog>
+      )}
+
+      {pendingDeficiencyRemoval && (
+        <AppDialog
+          open
+          title="Remove Associated Deficiency"
+          onClose={onCancelPendingDeficiencyRemoval}
+          size="confirm"
+          actions={[
+            <ResponsiveButton key="cancel" appearance="secondary" icon={<Dismiss24Regular />} label="Cancel" onClick={onCancelPendingDeficiencyRemoval} />,
+            <ResponsiveButton key="continue" appearance="primary" icon={<Delete24Regular />} label="Continue" onClick={onConfirmPendingDeficiencyRemoval} />,
+          ]}
+        >
+          <div className={styles.unsavedResponsesBody}>
+            <Text>
+              Changing this response from No will remove the associated deficiency when you save.
+            </Text>
+            {pendingDeficiencyRemoval.hasUnsavedEdits && (
+              <Text>
+                Any unsaved edits to the deficiency will be lost.
+              </Text>
+            )}
           </div>
         </AppDialog>
       )}
@@ -3143,7 +3503,7 @@ export default function App() {
           open={isDeficiencyOpen}
           title={deficiencyPopoutMode === 'list' ? 'Question Deficiencies' : deficiencyDraft.id ? 'Edit Deficiency' : 'Create Deficiency'}
           onClose={onCloseDeficiencyPopout}
-          surfaceClassName={styles.dialogSurfaceWide}
+          size="form"
           actions={deficiencyPopoutMode === 'list'
             ? <ResponsiveButton appearance="primary" icon={<Add24Regular />} label="Add Another Deficiency" onClick={onAddAnotherQuestionDeficiency} />
             : [
@@ -3274,7 +3634,7 @@ export default function App() {
           open={isDeficiencyCloseDialogOpen}
           title="Close Deficiency"
           onClose={() => setIsDeficiencyCloseDialogOpen(false)}
-          surfaceClassName={styles.dialogSurfaceCompact}
+          size="confirm"
           actions={[
             <ResponsiveButton key="cancel" appearance="secondary" icon={<Dismiss24Regular />} label="Cancel" onClick={() => setIsDeficiencyCloseDialogOpen(false)} />,
             <ResponsiveButton key="confirm" appearance="primary" icon={<CheckmarkCircle16Regular />} label="Confirm Close" disabled={!deficiencyCloseComment.trim()} onClick={() => { void onConfirmDeficiencyClose(); }} />,
@@ -3289,15 +3649,20 @@ export default function App() {
       {isTeamMemberOpen && (
         <AppDialog
           open={isTeamMemberOpen}
-          title="Add Team Member"
+          title={teamMemberDraft.id ? 'Edit Team Member Role' : 'Add Team Member'}
           onClose={onCloseTeamMemberPopout}
-          surfaceClassName={styles.dialogSurfaceWide}
-          actions={<ResponsiveButton appearance="primary" icon={<Add24Regular />} label="Add Member" disabled={!canSaveTeamMember || loading} onClick={() => { void onSaveTeamMember(); }} />}
+          size="form"
+          actions={[
+            teamMemberDraft.id
+              ? <ResponsiveButton key="delete" appearance="secondary" icon={<Delete24Regular />} label="Delete Member" disabled={loading || !canManageTeam} onClick={onOpenDeleteTeamMemberDialog} />
+              : null,
+            <ResponsiveButton key="save" appearance="primary" icon={<Add24Regular />} label={teamMemberDraft.id ? 'Save Role' : 'Add Member'} disabled={!canSaveTeamMember || loading} onClick={() => { void onSaveTeamMember(); }} />,
+          ].filter(Boolean)}
         >
           <div className={styles.modalFields}>
             <Field label="Member" required>
               <SearchableCombobox
-                disabled={userLookupLoading || userLookupOptions.length === 0}
+                disabled={Boolean(teamMemberDraft.id) || userLookupLoading || userLookupOptions.length === 0}
                 noOptionsLabel={userLookupLoading ? 'Loading users...' : 'No users found'}
                 options={userLookupOptions.map((option) => ({ value: option.id, label: option.label }))}
                 placeholder={userLookupLoading ? 'Loading users...' : 'Search and select a user'}
@@ -3334,12 +3699,34 @@ export default function App() {
         </AppDialog>
       )}
 
+      {isTeamMemberDeleteDialogOpen && (
+        <AppDialog
+          open={isTeamMemberDeleteDialogOpen}
+          title="Remove Team Member"
+          onClose={() => setIsTeamMemberDeleteDialogOpen(false)}
+          size="confirm"
+          actions={[
+            <ResponsiveButton key="cancel" appearance="secondary" icon={<Dismiss24Regular />} label="Cancel" onClick={() => setIsTeamMemberDeleteDialogOpen(false)} />,
+            <ResponsiveButton key="remove" appearance="primary" icon={<Delete24Regular />} label="Remove Member" disabled={loading} onClick={() => { void onConfirmDeleteTeamMember(); }} />,
+          ]}
+        >
+          <div className={styles.unsavedResponsesBody}>
+            <Text>
+              Remove {teamMemberDraft.memberName || 'this team member'} from this PSSR Plan?
+            </Text>
+            <Text>
+              This will delete the team member association from the current plan.
+            </Text>
+          </div>
+        </AppDialog>
+      )}
+
       {isChecklistTemplatePickerOpen && (
         <AppDialog
           open={isChecklistTemplatePickerOpen}
           title="Add Checklist From Template"
           onClose={onCloseChecklistTemplatePicker}
-          surfaceClassName={styles.dialogSurfaceWide}
+          size="wide"
           actions={<ResponsiveButton appearance="primary" icon={<CheckmarkCircle16Regular />} label="Confirm" disabled={!selectedTemplate || templateQuestionsLoading || loading} onClick={() => { void onConfirmChecklistTemplateCopy(); }} />}
         >
           <div className={styles.templatePickerLayout}>

@@ -356,6 +356,7 @@ export interface ChecklistDetailsScreenProps {
   onQuestionCommentChange: (questionId: string, comment: string) => void;
   onAddDeficiency: (question: QuestionVm) => void;
   onOpenQuestionDeficiencies: (question: QuestionVm) => void;
+  onEditDeficiency: (deficiency: DeficiencyVm) => void;
   isSummaryExpanded: boolean;
   checklistTab: ChecklistDetailsTab;
   onChecklistTabChange: (tab: ChecklistDetailsTab) => void;
@@ -669,6 +670,7 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                             { label: 'Closing Comment', value: deficiency.closeoutComment, valueBehavior: 'clamp' },
                           ]}
                           footer={<CardDate value={deficiency.createdOn} />}
+                          onClick={() => props.onEditDeficiency(deficiency)}
                         />
                       </GalleryListItem>
                     );
@@ -791,13 +793,13 @@ export default function ChecklistDetailsScreen(props: ChecklistDetailsScreenProp
                   <div className={styles.footerActions}>
                     <Text className={styles.footerStatus}>
                       {props.hasPendingChanges
-                        ? `${props.pendingResponseCount} unsaved ${props.pendingResponseCount === 1 ? 'response' : 'responses'}`
-                        : 'All responses saved'}
+                        ? `${props.pendingResponseCount} unsaved ${props.pendingResponseCount === 1 ? 'change' : 'changes'}`
+                        : 'All checklist changes saved'}
                     </Text>
                     <ResponsiveButton
                       appearance="primary"
                       icon={<Save24Regular />}
-                      label={props.isSavingResponses ? 'Saving...' : 'Save Responses'}
+                      label={props.isSavingResponses ? 'Saving...' : 'Save Changes'}
                       disabled={!props.isQuestionAnsweringEnabled || !props.hasPendingChanges || props.loading || props.isSavingResponses}
                       title={props.questionAnsweringTitle}
                       onClick={props.onSaveResponses}

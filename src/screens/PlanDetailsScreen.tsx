@@ -254,6 +254,7 @@ export interface PlanDetailsScreenProps {
   onOpenNewDeficiency: () => void;
   onEditDeficiency: (deficiency: DeficiencyVm) => void;
   onOpenAddTeamMember: () => void;
+  onEditTeamMember: (member: TeamMemberVm) => void;
 }
 
 export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactNode {
@@ -691,6 +692,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
                       { label: 'Phone Number', value: member.phone },
                     ]}
                     footer={member.createdOn ? <CardDate value={member.createdOn} /> : undefined}
+                    onClick={props.canManageTeam ? () => props.onEditTeamMember(member) : undefined}
                   />
                 </GalleryListItem>
               )}
