@@ -4,6 +4,7 @@ import {
   Card,
   Field,
   Input,
+  MessageBar,
   Textarea,
   Text,
   makeStyles,
@@ -149,6 +150,19 @@ export interface TemplateLibraryScreenProps {
   loading: boolean;
   error: string;
   hasSelectedPlan: boolean;
+  canCreateTemplateChecklist: boolean;
+  canCreateTemplateQuestion: boolean;
+  canEditTemplateChecklist: (template: TemplateChecklistVm) => boolean;
+  canDuplicateTemplateChecklist: (template: TemplateChecklistVm) => boolean;
+  canDeleteTemplateChecklist: (template: TemplateChecklistVm) => boolean;
+  canEditTemplateQuestion: (question: TemplateQuestionVm) => boolean;
+  canDeleteTemplateQuestion: (question: TemplateQuestionVm) => boolean;
+  templateChecklistActionTitle?: string;
+  templateQuestionActionTitle?: string;
+  selectedTemplateBanner?: string;
+  createTemplateQuestionLabel: string;
+  lockTemplateChecklistSite: boolean;
+  lockTemplateQuestionSite: boolean;
   templateRows: TemplateChecklistVm[];
   selectedTemplateId: string;
   selectedTemplateIds: string[];
@@ -165,6 +179,9 @@ export interface TemplateLibraryScreenProps {
   onSaveTemplateChecklist: () => void;
   isTemplateQuestionEditorOpen: boolean;
   templateQuestionDraft: TemplateQuestionDraft;
+  templateQuestionSequenceError?: string;
+  templateQuestionSequenceLimit: number;
+  canSaveTemplateQuestion: boolean;
   templateQuestionSiteOptions: OptionItem[];
   onTemplateQuestionDraftChange: (changes: Partial<TemplateQuestionDraft>) => void;
   onCloseTemplateQuestionEditor: () => void;
@@ -223,7 +240,13 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                 <Text weight="semibold">Template Checklists</Text>
                 <Caption1>{props.templateRows.length} records</Caption1>
               </div>
-              <ResponsiveButton icon={<Add24Regular />} label="Add Checklist" onClick={props.onOpenCreateTemplateChecklist} />
+              <ResponsiveButton
+                icon={<Add24Regular />}
+                label="Add Checklist"
+                disabled={!props.canCreateTemplateChecklist}
+                title={props.templateChecklistActionTitle}
+                onClick={props.onOpenCreateTemplateChecklist}
+              />
             </div>
             <div className={styles.scrollRegion}>
               <div className={styles.listStack}>
@@ -244,6 +267,7 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                       right={
                         <div className={styles.chipsRow}>
                           <Pill kind="status" value={template.statusLabel ?? 'No Status'} />
+                          <Pill kind="neutral" value={template.siteLabel?.trim() === 'Enterprise' ? 'Enterprise' : `Site: ${template.siteLabel ?? 'Unknown'}`} />
                           <Pill kind="neutral" value={`${template.questionCount} questions`} />
                           <Button
                             appearance="subtle"
@@ -270,15 +294,15 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                         onClick={(event) => event.stopPropagation()}
                       >
                         <div className={styles.actionMenu}>
-                          <ResponsiveButton appearance="subtle" icon={<Edit24Regular />} label="Edit" ariaLabel={`Edit checklist ${template.name}`} onClick={() => {
+                          <ResponsiveButton appearance="subtle" icon={<Edit24Regular />} label="Edit" disabled={!props.canEditTemplateChecklist(template)} title={props.canEditTemplateChecklist(template) ? undefined : props.templateChecklistActionTitle} ariaLabel={`Edit checklist ${template.name}`} onClick={() => {
                             setExpandedTemplateActionsId('');
                             props.onEditTemplateChecklist(template);
                           }} />
-                          <ResponsiveButton appearance="subtle" icon={<Copy24Regular />} label="Duplicate" ariaLabel={`Duplicate checklist ${template.name}`} onClick={() => {
+                          <ResponsiveButton appearance="subtle" icon={<Copy24Regular />} label="Duplicate" disabled={!props.canDuplicateTemplateChecklist(template)} title={props.canDuplicateTemplateChecklist(template) ? undefined : props.templateChecklistActionTitle} ariaLabel={`Duplicate checklist ${template.name}`} onClick={() => {
                             setExpandedTemplateActionsId('');
                             props.onDuplicateTemplateChecklist(template);
                           }} />
-                          <ResponsiveButton appearance="subtle" icon={<Delete24Regular />} label="Delete" ariaLabel={`Delete checklist ${template.name}`} onClick={() => {
+                          <ResponsiveButton appearance="subtle" icon={<Delete24Regular />} label="Delete" disabled={!props.canDeleteTemplateChecklist(template)} title={props.canDeleteTemplateChecklist(template) ? undefined : props.templateChecklistActionTitle} ariaLabel={`Delete checklist ${template.name}`} onClick={() => {
                             setExpandedTemplateActionsId('');
                             props.onDeleteTemplateChecklist(template);
                           }} />
@@ -298,10 +322,20 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                 <Text weight="semibold">Template Questions</Text>
                 {props.selectedTemplate && <Caption1>{props.selectedTemplate.name}</Caption1>}
               </div>
-              <ResponsiveButton icon={<Add24Regular />} label="Add Question" onClick={props.onOpenCreateTemplateQuestion} disabled={!props.selectedTemplate} />
+              <ResponsiveButton
+                icon={<Add24Regular />}
+                label={props.createTemplateQuestionLabel}
+                onClick={props.onOpenCreateTemplateQuestion}
+                disabled={!props.selectedTemplate || !props.canCreateTemplateQuestion}
+                title={props.templateQuestionActionTitle}
+              />
             </div>
             <Card appearance="filled-alternative">
               <div className={`${styles.questionsPanel} ${styles.scrollRegion}`}>
+                {props.selectedTemplateBanner && (
+                  <MessageBar intent="warning">{props.selectedTemplateBanner}</MessageBar>
+                )}
+
                 {!props.selectedTemplate && (
                   <Text className={styles.helperText}>Select a template checklist to view its questions.</Text>
                 )}
@@ -327,11 +361,11 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                             {question.sequenceOrder}. {question.questionText}
                           </Text>
                           <div className={styles.actionRow}>
-                            <ResponsiveButton appearance="subtle" icon={<Edit24Regular />} label="Edit" ariaLabel={`Edit question ${question.sequenceOrder}`} onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+                            <ResponsiveButton appearance="subtle" icon={<Edit24Regular />} label="Edit" disabled={!props.canEditTemplateQuestion(question)} title={props.canEditTemplateQuestion(question) ? undefined : props.templateQuestionActionTitle} ariaLabel={`Edit question ${question.sequenceOrder}`} onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
                               event.stopPropagation();
                               props.onEditTemplateQuestion(question);
                             }} />
-                            <ResponsiveButton appearance="subtle" icon={<Delete24Regular />} label="Delete" ariaLabel={`Delete question ${question.sequenceOrder}`} onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+                            <ResponsiveButton appearance="subtle" icon={<Delete24Regular />} label="Delete" disabled={!props.canDeleteTemplateQuestion(question)} title={props.canDeleteTemplateQuestion(question) ? undefined : props.templateQuestionActionTitle} ariaLabel={`Delete question ${question.sequenceOrder}`} onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
                               event.stopPropagation();
                               props.onDeleteTemplateQuestion(question);
                             }} />
@@ -339,6 +373,7 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                         </div>
                         <div className={styles.chipsRow}>
                           <Pill kind="neutral" value={question.isMandatory ? 'Required' : 'Optional'} />
+                          <Pill kind="neutral" value={question.siteLabel?.trim() === 'Enterprise' ? 'Enterprise' : `Site: ${question.siteLabel ?? 'Unknown'}`} />
                         </div>
                       </Card>
                     ))}
@@ -376,6 +411,7 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                 </Field>
                 <Field label="Site">
                   <SearchableCombobox
+                    disabled={props.lockTemplateChecklistSite}
                     options={props.templateSiteOptions.map((option) => ({ value: String(option.key), label: option.label }))}
                     selectedValue={props.templateChecklistDraft.siteCode !== undefined ? String(props.templateChecklistDraft.siteCode) : undefined}
                     onSelect={(value) => {
@@ -394,7 +430,7 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
               open={props.isTemplateQuestionEditorOpen}
               title={props.templateQuestionDraft.id ? 'Edit Question' : 'New Question'}
               onClose={props.onCloseTemplateQuestionEditor}
-              actions={<ResponsiveButton appearance="primary" icon={<Save24Regular />} label="Save" onClick={props.onSaveTemplateQuestion} />}
+              actions={<ResponsiveButton appearance="primary" icon={<Save24Regular />} label="Save" disabled={!props.canSaveTemplateQuestion} onClick={props.onSaveTemplateQuestion} />}
             >
               <div className={styles.inlineEditor}>
                 <Field label="Question" required>
@@ -403,10 +439,11 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                     onChange={(_, data) => props.onTemplateQuestionDraftChange({ questionText: data.value })}
                   />
                 </Field>
-                <Field label="Sequence Number">
+                <Field label="Sequence Number" validationMessage={props.templateQuestionSequenceError}>
                   <Input
                     type="number"
                     min={1}
+                    max={props.templateQuestionSequenceLimit}
                     value={String(props.templateQuestionDraft.sequenceOrder)}
                     onChange={(_, data) => {
                       const nextValue = Number(data.value);
@@ -430,6 +467,7 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                 </Field>
                 <Field label="Site">
                   <SearchableCombobox
+                    disabled={props.lockTemplateQuestionSite}
                     options={props.templateQuestionSiteOptions.map((option) => ({ value: String(option.key), label: option.label }))}
                     selectedValue={props.templateQuestionDraft.siteCode !== undefined ? String(props.templateQuestionDraft.siteCode) : undefined}
                     onSelect={(value) => {

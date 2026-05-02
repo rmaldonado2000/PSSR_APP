@@ -231,7 +231,7 @@ export interface PlanDetailsScreenProps {
   isPlanEditable: boolean;
   isPhaseEditable: boolean;
   hasPlanDetailsChanges: boolean;
-  hasTemplateAccess: boolean;
+  canAddChecklistFromTemplate: boolean;
   headerCommands: Array<{
     key: string;
     label: string;
@@ -540,7 +540,7 @@ export default function PlanDetailsScreen(props: PlanDetailsScreenProps): ReactN
           title="Plan Checklists"
           className={styles.listPanel}
           action={(
-            <ResponsiveButton icon={<Add24Regular />} label="Add Checklist" disabled={!props.hasTemplateAccess || !props.canManageChecklistStructure} title={props.checklistActionTitle} onClick={props.onOpenChecklistTemplatePicker} />
+            <ResponsiveButton icon={<Add24Regular />} label="Add Checklist" disabled={!props.canAddChecklistFromTemplate || !props.canManageChecklistStructure} title={props.checklistActionTitle} onClick={props.onOpenChecklistTemplatePicker} />
           )}
         >
           <DataState

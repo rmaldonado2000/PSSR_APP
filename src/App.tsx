@@ -6,6 +6,7 @@ import {
   FluentProvider,
   Input,
   Link,
+  MessageBar,
   Spinner,
   Text,
   Textarea,
@@ -93,6 +94,33 @@ import {
 import { t } from './app/i18n';
 import { formatRoleLabel } from './app/format';
 import { type ChecklistDetailsTab, type AppRouteTab, type PlanDetailsTab, parseHashRoute, updateHashRoute } from './app/router';
+import {
+  canCreateTemplateChecklist,
+  canCreateTemplateQuestion,
+  canDeleteTemplateChecklist,
+  canDeleteTemplateQuestion,
+  canDuplicateTemplateChecklist,
+  canEditTemplateChecklist,
+  canEditTemplateQuestion,
+  canResequenceTemplateQuestions,
+  filterTemplateChecklistsForPlanSite,
+  filterTemplateQuestionsForPlanSite,
+  filterTemplateChecklistsForUser,
+  filterTemplateQuestionsForUser,
+  getDefaultTemplateChecklistSiteCode,
+  getDefaultTemplateQuestionSiteCode,
+  getEditableTemplateQuestions,
+  getTemplateAccessDeniedMessage,
+  getTemplateQuestionCreateLabel,
+  getTemplateQuestionSequenceError,
+  getTemplateQuestionSequenceLimit,
+  getTemplateReadonlyMessage,
+  getTemplateScopeLabel,
+  hasTemplateAccess as userHasTemplateAccess,
+  orderTemplateQuestionsForPlanCopy,
+  shouldLockTemplateChecklistSite,
+  shouldLockTemplateQuestionSite,
+} from './app/templateAccess';
 import { trackError, trackFlow, trackView } from './app/telemetry';
 import type {
   AppView,
@@ -806,7 +834,7 @@ function createStagedDeficiencyId(): string {
 }
 
 function moveQuestionIdToSequence(
-  questions: TemplateQuestionVm[],
+  questions: Array<Pick<TemplateQuestionVm, 'id' | 'sequenceOrder'>>,
   questionId: string,
   requestedSequenceOrder: number,
 ): string[] {
@@ -820,8 +848,10 @@ function moveQuestionIdToSequence(
   return orderedIds;
 }
 
-function hasTemplateAccess(): boolean {
-  return true;
+function getNextTemplateQuestionSequence(questions: TemplateQuestionVm[]): number {
+  return questions.reduce((maxSequenceOrder, question) => {
+    return Math.max(maxSequenceOrder, question.sequenceOrder ?? 0);
+  }, 0) + 1;
 }
 
 function isStandaloneLocalhostSession(): boolean {
@@ -936,7 +966,9 @@ export default function App() {
   const [view, setView] = useState<AppView>('plans');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [bannerMessage, setBannerMessage] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<CurrentUserProfileVm>();
+  const [currentUserResolved, setCurrentUserResolved] = useState<boolean>(false);
   const [isMobileUserDetailsOpen, setIsMobileUserDetailsOpen] = useState<boolean>(false);
 
   const [plans, setPlans] = useState<PlanVm[]>([]);
@@ -1139,13 +1171,72 @@ export default function App() {
       return siteMatch && typeMatch && phaseMatch && queryMatch;
     });
   }, [phaseFilter, plans, searchText, siteFilter, typeFilter]);
+  const visibleTemplateRows = useMemo(
+    () => filterTemplateChecklistsForUser(currentUser, templateRows),
+    [currentUser, templateRows],
+  );
+  const pickerTemplateRows = useMemo(
+    () => filterTemplateChecklistsForPlanSite(templateRows, selectedPlan),
+    [selectedPlan, templateRows],
+  );
   const effectiveSelectedTemplateId = useMemo(
-    () => resolveSelectedTemplateId(templateRows, selectedTemplateId),
-    [selectedTemplateId, templateRows],
+    () => resolveSelectedTemplateId(
+      view === 'template-library'
+        ? visibleTemplateRows
+        : isChecklistTemplatePickerOpen
+          ? pickerTemplateRows
+          : visibleTemplateRows,
+      selectedTemplateId,
+    ),
+    [isChecklistTemplatePickerOpen, pickerTemplateRows, selectedTemplateId, view, visibleTemplateRows],
   );
   const selectedTemplate = useMemo(
-    () => templateRows.find((item) => item.id === effectiveSelectedTemplateId),
-    [effectiveSelectedTemplateId, templateRows],
+    () => (
+      (view === 'template-library'
+        ? visibleTemplateRows
+        : isChecklistTemplatePickerOpen
+          ? pickerTemplateRows
+          : visibleTemplateRows)
+        .find((item) => item.id === effectiveSelectedTemplateId)
+    ),
+    [effectiveSelectedTemplateId, isChecklistTemplatePickerOpen, pickerTemplateRows, view, visibleTemplateRows],
+  );
+  const visibleTemplateQuestions = useMemo(
+    () => (
+      isChecklistTemplatePickerOpen
+        ? filterTemplateQuestionsForPlanSite(templateQuestions, selectedPlan)
+        : filterTemplateQuestionsForUser(currentUser, selectedTemplate, templateQuestions)
+    ),
+    [currentUser, isChecklistTemplatePickerOpen, selectedPlan, selectedTemplate, templateQuestions],
+  );
+  const hasTemplateLibraryAccess = useMemo(() => userHasTemplateAccess(currentUser), [currentUser]);
+  const selectedTemplateReadonlyMessage = useMemo(
+    () => selectedTemplate ? getTemplateReadonlyMessage(currentUser, selectedTemplate) : undefined,
+    [currentUser, selectedTemplate],
+  );
+  const templateChecklistSiteLocked = useMemo(
+    () => shouldLockTemplateChecklistSite(currentUser),
+    [currentUser],
+  );
+  const templateQuestionSiteLocked = useMemo(
+    () => shouldLockTemplateQuestionSite(currentUser),
+    [currentUser],
+  );
+  const templateQuestionCreateLabel = useMemo(
+    () => getTemplateQuestionCreateLabel(currentUser, selectedTemplate),
+    [currentUser, selectedTemplate],
+  );
+  const templateQuestionSequenceLimit = useMemo(
+    () => getTemplateQuestionSequenceLimit(templateQuestions, templateQuestionDraft.id),
+    [templateQuestionDraft.id, templateQuestions],
+  );
+  const templateQuestionSequenceError = useMemo(
+    () => getTemplateQuestionSequenceError(templateQuestionDraft.sequenceOrder, templateQuestions, templateQuestionDraft.id),
+    [templateQuestionDraft.id, templateQuestionDraft.sequenceOrder, templateQuestions],
+  );
+  const canSaveTemplateQuestion = useMemo(
+    () => Boolean(selectedTemplate && templateQuestionDraft.questionText.trim() && !templateQuestionSequenceError),
+    [selectedTemplate, templateQuestionDraft.questionText, templateQuestionSequenceError],
   );
   const associatedQuestionDeficiencies = useMemo(
     () => deficiencyQuestionId
@@ -1309,6 +1400,10 @@ export default function App() {
             userPrincipalName: '',
           });
           trackError('app.context.load', contextError);
+        }
+      } finally {
+        if (!isCancelled) {
+          setCurrentUserResolved(true);
         }
       }
     };
@@ -1690,10 +1785,16 @@ export default function App() {
   }, [goPlans, loadPlanChildren, planTab, selectedPlan, syncHash]);
 
   const goTemplateLibrary = useCallback((replace = false) => {
+    if (!userHasTemplateAccess(currentUser)) {
+      goPlans(replace);
+      setBannerMessage(getTemplateAccessDeniedMessage());
+      return;
+    }
+
     setError('');
     setView('template-library');
     syncHash('template-library', selectedPlan?.id, undefined, undefined, replace);
-  }, [selectedPlan, syncHash]);
+  }, [currentUser, goPlans, selectedPlan, syncHash]);
 
   const syncCurrentRoute = useCallback((replace = true) => {
     const routeTab = view === 'plan-details'
@@ -1758,6 +1859,12 @@ export default function App() {
     }
 
     if (route.view === 'template-library') {
+      if (currentUserResolved && !userHasTemplateAccess(currentUser)) {
+        goPlans(true);
+        setBannerMessage(getTemplateAccessDeniedMessage());
+        return;
+      }
+
       goTemplateLibrary(true);
       return;
     }
@@ -1783,13 +1890,26 @@ export default function App() {
           await openChecklist(matchedPlan, matchedChecklist, false, true, (route.tab as ChecklistDetailsTab | undefined) ?? 'questions');
       }
     }
-  }, [goPlans, goTemplateLibrary, openChecklist, openPlan, plans]);
+  }, [currentUser, currentUserResolved, goPlans, goTemplateLibrary, openChecklist, openPlan, plans]);
 
   const onOpenTemplateChecklistModal = useCallback((template?: TemplateChecklistVm) => {
+    if (!template && !canCreateTemplateChecklist(currentUser)) {
+      setBannerMessage(getTemplateAccessDeniedMessage());
+      return;
+    }
+
+    if (template && !canEditTemplateChecklist(currentUser, template)) {
+      setBannerMessage(getTemplateReadonlyMessage(currentUser, template) ?? getTemplateAccessDeniedMessage());
+      return;
+    }
+
     setError('');
-    setTemplateChecklistDraft(createTemplateChecklistDraft(template));
+    setTemplateChecklistDraft({
+      ...createTemplateChecklistDraft(template),
+      siteCode: getDefaultTemplateChecklistSiteCode(currentUser, template),
+    });
     setIsTemplateChecklistOpen(true);
-  }, []);
+  }, [currentUser]);
 
   const onCloseTemplateChecklistEditor = useCallback(() => {
     setIsTemplateChecklistOpen(false);
@@ -1801,14 +1921,24 @@ export default function App() {
       return;
     }
 
+    if (!question && !canCreateTemplateQuestion(currentUser, selectedTemplate)) {
+      setBannerMessage(getTemplateReadonlyMessage(currentUser, selectedTemplate) ?? getTemplateAccessDeniedMessage());
+      return;
+    }
+
+    if (question && !canEditTemplateQuestion(currentUser, selectedTemplate, question)) {
+      setBannerMessage(getTemplateReadonlyMessage(currentUser, selectedTemplate) ?? getTemplateAccessDeniedMessage());
+      return;
+    }
+
     setError('');
     setTemplateQuestionsError('');
     setTemplateQuestionDraft(createTemplateQuestionDraft(question, {
-      sequenceOrder: question?.sequenceOrder ?? (templateQuestions.length + 1),
-      siteCode: question?.siteCode ?? selectedTemplate.siteCode,
+      sequenceOrder: question?.sequenceOrder ?? getNextTemplateQuestionSequence(templateQuestions),
+      siteCode: getDefaultTemplateQuestionSiteCode(currentUser, selectedTemplate, question),
     }));
     setIsTemplateQuestionOpen(true);
-  }, [selectedTemplate, templateQuestions.length]);
+  }, [currentUser, selectedTemplate, templateQuestions]);
 
   const onCloseTemplateQuestionEditor = useCallback(() => {
     setIsTemplateQuestionOpen(false);
@@ -1855,14 +1985,14 @@ export default function App() {
     setTemplateQuestionsError('');
     setIsChecklistTemplatePickerOpen(true);
 
-    if (templateRows.length > 0) {
-      setSelectedTemplateId((current) => resolveSelectedTemplateId(templateRows, current));
+    if (pickerTemplateRows.length > 0) {
+      setSelectedTemplateId((current) => resolveSelectedTemplateId(pickerTemplateRows, current));
       return;
     }
 
     try {
       setLoading(true);
-      const rows = await loadTemplates();
+      const rows = filterTemplateChecklistsForPlanSite(await loadTemplates(), selectedPlan);
       setSelectedTemplateId((current) => resolveSelectedTemplateId(rows, current));
     } catch (templateLoadError) {
       const message = templateLoadError instanceof Error ? templateLoadError.message : String(templateLoadError);
@@ -1871,7 +2001,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [loadTemplates, selectedPlan?.id, templateRows]);
+  }, [loadTemplates, pickerTemplateRows, selectedPlan]);
 
   const onCloseChecklistTemplatePicker = useCallback(() => {
     setIsChecklistTemplatePickerOpen(false);
@@ -1894,14 +2024,14 @@ export default function App() {
           name: templateChecklistDraft.name.trim(),
           disciplineCode: templateChecklistDraft.disciplineCode,
           siteCode: templateChecklistDraft.siteCode,
-        });
+        }, currentUser);
         trackFlow('templateChecklist.update', { templateChecklistId: templateChecklistDraft.id });
       } else {
         nextTemplateId = await createTemplateChecklist({
           name: templateChecklistDraft.name.trim(),
           disciplineCode: templateChecklistDraft.disciplineCode,
           siteCode: templateChecklistDraft.siteCode,
-        });
+        }, currentUser);
 
         if (duplicateSourceTemplateId && nextTemplateId) {
           const sourceQuestions = await loadGalleryWithRetry(() => getTemplateQuestions(duplicateSourceTemplateId));
@@ -1912,7 +2042,7 @@ export default function App() {
               sequenceOrder: question.sequenceOrder,
               isMandatory: question.isMandatory,
               siteCode: templateChecklistDraft.siteCode,
-            });
+            }, currentUser);
           }
           trackFlow('templateChecklist.duplicate', {
             templateChecklistId: duplicateSourceTemplateId,
@@ -1931,19 +2061,24 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [onCloseTemplateChecklistEditor, refreshTemplateLibrary, templateChecklistDraft]);
+  }, [currentUser, onCloseTemplateChecklistEditor, refreshTemplateLibrary, templateChecklistDraft]);
 
   const onDuplicateTemplateChecklist = useCallback((template: TemplateChecklistVm) => {
+    if (!canDuplicateTemplateChecklist(currentUser)) {
+      setBannerMessage(getTemplateAccessDeniedMessage());
+      return;
+    }
+
     setError('');
     setTemplateChecklistDraft({
       id: undefined,
       name: `${template.name} Copy`,
       disciplineCode: template.disciplineCode,
-      siteCode: template.siteCode,
+      siteCode: getDefaultTemplateChecklistSiteCode(currentUser, template) ?? template.siteCode,
       duplicateSourceTemplateId: template.id,
     });
     setIsTemplateChecklistOpen(true);
-  }, []);
+  }, [currentUser]);
 
   const onDeleteTemplateChecklist = useCallback(async (template: TemplateChecklistVm) => {
     if (!window.confirm(`Delete template checklist "${template.name}"?`)) {
@@ -1953,7 +2088,7 @@ export default function App() {
     try {
       setLoading(true);
       setError('');
-      await deleteTemplateChecklist(template.id);
+      await deleteTemplateChecklist(template.id, currentUser);
       setSelectedTemplateIds((current) => current.filter((id) => id !== template.id));
       trackFlow('templateChecklist.delete', { templateChecklistId: template.id });
       const remainingTemplates = await refreshTemplateLibrary(
@@ -1970,10 +2105,16 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveSelectedTemplateId, refreshTemplateLibrary, templateRows]);
+  }, [currentUser, effectiveSelectedTemplateId, refreshTemplateLibrary, templateRows]);
 
   const onSaveTemplateQuestion = useCallback(async () => {
     if (!selectedTemplate || !templateQuestionDraft.questionText.trim()) {
+      return;
+    }
+
+    if (templateQuestionSequenceError) {
+      setTemplateQuestionsError(templateQuestionSequenceError);
+      setError(templateQuestionSequenceError);
       return;
     }
 
@@ -1990,26 +2131,30 @@ export default function App() {
           sequenceOrder: templateQuestionDraft.sequenceOrder,
           isMandatory: templateQuestionDraft.isMandatory,
           siteCode: templateQuestionDraft.siteCode,
-        });
+        }, currentUser);
         trackFlow('templateQuestion.update', { templateQuestionId: templateQuestionDraft.id, templateChecklistId: selectedTemplate.id });
       } else {
         targetQuestionId = await createTemplateQuestion({
           templateChecklistId: selectedTemplate.id,
           questionText: templateQuestionDraft.questionText.trim(),
-          sequenceOrder: templateQuestions.length + 1,
+          sequenceOrder: templateQuestionDraft.sequenceOrder,
           isMandatory: templateQuestionDraft.isMandatory,
           siteCode: templateQuestionDraft.siteCode,
-        });
+        }, currentUser);
         trackFlow('templateQuestion.create', { templateQuestionId: targetQuestionId, templateChecklistId: selectedTemplate.id });
       }
 
-      if (targetQuestionId) {
+      if (targetQuestionId && canResequenceTemplateQuestions(currentUser, selectedTemplate)) {
+        const editableQuestions = getEditableTemplateQuestions(currentUser, selectedTemplate, templateQuestions);
+        const sequencingQuestions = templateQuestionDraft.id
+          ? editableQuestions
+          : [...editableQuestions, { id: targetQuestionId, sequenceOrder: templateQuestionDraft.sequenceOrder }];
         const orderedIds = moveQuestionIdToSequence(
-          templateQuestions,
+          sequencingQuestions,
           targetQuestionId,
           templateQuestionDraft.sequenceOrder,
         );
-        await resequenceTemplateQuestions(orderedIds);
+        await resequenceTemplateQuestions(orderedIds, currentUser);
       }
 
       await refreshTemplateLibrary(selectedTemplate.id);
@@ -2023,7 +2168,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [loadTemplateQuestions, onCloseTemplateQuestionEditor, refreshTemplateLibrary, selectedTemplate, templateQuestionDraft, templateQuestions]);
+  }, [currentUser, loadTemplateQuestions, onCloseTemplateQuestionEditor, refreshTemplateLibrary, selectedTemplate, templateQuestionDraft, templateQuestionSequenceError, templateQuestions]);
 
   const onDeleteTemplateQuestion = useCallback(async (question: TemplateQuestionVm) => {
     if (!selectedTemplate || !window.confirm(`Delete question ${question.sequenceOrder}?`)) {
@@ -2034,12 +2179,12 @@ export default function App() {
       setLoading(true);
       setError('');
       setTemplateQuestionsError('');
-      await deleteTemplateQuestion(question.id);
-      const remainingIds = templateQuestions
+      await deleteTemplateQuestion(question.id, currentUser);
+      const remainingIds = getEditableTemplateQuestions(currentUser, selectedTemplate, templateQuestions)
         .filter((item) => item.id !== question.id)
         .sort((left, right) => left.sequenceOrder - right.sequenceOrder)
         .map((item) => item.id);
-      await resequenceTemplateQuestions(remainingIds);
+      await resequenceTemplateQuestions(remainingIds, currentUser);
       trackFlow('templateQuestion.delete', { templateQuestionId: question.id, templateChecklistId: selectedTemplate.id });
       await refreshTemplateLibrary(selectedTemplate.id);
       await loadTemplateQuestions(selectedTemplate.id);
@@ -2051,9 +2196,11 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [loadTemplateQuestions, refreshTemplateLibrary, selectedTemplate, templateQuestions]);
+  }, [currentUser, loadTemplateQuestions, refreshTemplateLibrary, selectedTemplate, templateQuestions]);
 
   useEffect(() => {
+    let isCancelled = false;
+
     const initialize = async () => {
       if (await maybeRedirectToLocalPlay()) {
         return;
@@ -2061,8 +2208,14 @@ export default function App() {
 
       setLoading(true);
       setError('');
+
+      let nextPlans: PlanVm[] = [];
       try {
-        const nextPlans = await loadPlansWithStartupRetry();
+        nextPlans = await loadPlans();
+        if (isCancelled) {
+          return;
+        }
+
         void loadTemplatesWithStartupRetry().catch((templateError) => {
           trackError('templates.load.background', templateError);
         });
@@ -2091,18 +2244,43 @@ export default function App() {
 
         initialRouteAppliedRef.current = true;
       } catch (initError) {
+        if (isCancelled) {
+          return;
+        }
+
         const message = mapInitializationError(initError);
         setError(message);
         trackError('app.initialize', initError);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     initialize().catch((unhandledError) => {
       trackError('app.initialize.unhandled', unhandledError);
     });
-  }, [goPlans, loadPlansWithStartupRetry, loadTemplatesWithStartupRetry, openChecklist, openPlan]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [goPlans, loadPlans, loadTemplatesWithStartupRetry, openChecklist, openPlan]);
+
+  useEffect(() => {
+    if (!currentUserResolved || view !== 'template-library' || userHasTemplateAccess(currentUser)) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      goPlans(true);
+      setBannerMessage(getTemplateAccessDeniedMessage());
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [currentUser, currentUserResolved, goPlans, view]);
 
   useEffect(() => {
     if (!initialRouteAppliedRef.current) {
@@ -3007,7 +3185,7 @@ export default function App() {
 
     try {
       setLoading(true);
-      await copyTemplatesToPlan(selectedPlan.id, selectedTemplateIds);
+      await copyTemplatesToPlan(selectedPlan.id, selectedTemplateIds, selectedPlan);
       trackFlow('templates.copy', { planId: selectedPlan.id, templateCount: selectedTemplateIds.length });
       setSelectedTemplateIds([]);
       await openPlan(selectedPlan, false, true, 'checklists');
@@ -3046,7 +3224,7 @@ export default function App() {
     try {
       setLoading(true);
       setError('');
-      await copyTemplatesToPlan(selectedPlan.id, [selectedTemplate.id]);
+      await copyTemplatesToPlan(selectedPlan.id, [selectedTemplate.id], selectedPlan);
       trackFlow('templates.copy.dialog', { planId: selectedPlan.id, templateId: selectedTemplate.id });
       await openPlan(selectedPlan, false, true, 'checklists');
       setIsChecklistTemplatePickerOpen(false);
@@ -3118,7 +3296,7 @@ export default function App() {
                   <span className={styles.appHeaderNavLabel}>{t('home')}</span>
                 </Button>
               )}
-              {hasTemplateAccess() && (
+              {hasTemplateLibraryAccess && (
                 <Button
                   appearance={view === 'template-library' ? 'primary' : 'subtle'}
                   icon={<DocumentMultiple24Regular />}
@@ -3169,6 +3347,12 @@ export default function App() {
           styles.main,
           view === 'plans' ? styles.mainLocked : styles.mainDetail,
         )}>
+          {bannerMessage && (
+            <div className={styles.appBanner}>
+              <MessageBar intent="warning">{bannerMessage}</MessageBar>
+            </div>
+          )}
+
           {view !== 'plans' && (
             <div className={styles.breadcrumbRow}>
               {isMobileBreadcrumbLayout && view === 'plan-details' && selectedPlan ? (
@@ -3318,12 +3502,14 @@ export default function App() {
                 isPlanEditable={isPlanEditable}
                 isPhaseEditable={false}
                 hasPlanDetailsChanges={hasPlanDetailsChanges}
-                hasTemplateAccess={hasTemplateAccess()}
+                canAddChecklistFromTemplate={true}
                 headerCommands={planHeaderCommands}
                 warningMessages={planWarningMessages}
                 isSummaryExpanded={isPlanSummaryExpanded}
                 canManageChecklistStructure={canManageChecklistStructure}
-                checklistActionTitle={canManageChecklistStructure ? undefined : 'Checklist structure is locked in the current lifecycle phase.'}
+                checklistActionTitle={canManageChecklistStructure
+                  ? undefined
+                  : 'Checklist structure is locked in the current lifecycle phase.'}
                 canCreateDeficiency={false}
                 deficiencyActionTitle="Deficiencies must be created from a checklist question answered No during Execution."
                 canManageTeam={canManageTeam}
@@ -3395,11 +3581,24 @@ export default function App() {
                 loading={loading}
                 error={error}
                 hasSelectedPlan={Boolean(selectedPlan)}
-                templateRows={templateRows}
+                canCreateTemplateChecklist={canCreateTemplateChecklist(currentUser)}
+                canCreateTemplateQuestion={Boolean(selectedTemplate && canCreateTemplateQuestion(currentUser, selectedTemplate))}
+                canEditTemplateChecklist={(template) => canEditTemplateChecklist(currentUser, template)}
+                canDuplicateTemplateChecklist={() => canDuplicateTemplateChecklist(currentUser)}
+                canDeleteTemplateChecklist={(template) => canDeleteTemplateChecklist(currentUser, template)}
+                canEditTemplateQuestion={(question) => Boolean(selectedTemplate && canEditTemplateQuestion(currentUser, selectedTemplate, question))}
+                canDeleteTemplateQuestion={(question) => Boolean(selectedTemplate && canDeleteTemplateQuestion(currentUser, selectedTemplate, question))}
+                templateChecklistActionTitle={selectedTemplateReadonlyMessage ?? getTemplateAccessDeniedMessage()}
+                templateQuestionActionTitle={selectedTemplateReadonlyMessage ?? getTemplateAccessDeniedMessage()}
+                selectedTemplateBanner={selectedTemplateReadonlyMessage}
+                createTemplateQuestionLabel={templateQuestionCreateLabel}
+                lockTemplateChecklistSite={templateChecklistSiteLocked}
+                lockTemplateQuestionSite={templateQuestionSiteLocked}
+                templateRows={visibleTemplateRows}
                 selectedTemplateId={effectiveSelectedTemplateId}
                 selectedTemplateIds={selectedTemplateIds}
                 selectedTemplate={selectedTemplate}
-                templateQuestions={templateQuestions}
+                templateQuestions={visibleTemplateQuestions}
                 templateQuestionsLoading={templateQuestionsLoading}
                 templateQuestionsError={templateQuestionsError}
                 isTemplateChecklistEditorOpen={isTemplateChecklistOpen}
@@ -3413,6 +3612,9 @@ export default function App() {
                 onSaveTemplateChecklist={() => { void onSaveTemplateChecklist(); }}
                 isTemplateQuestionEditorOpen={isTemplateQuestionOpen}
                 templateQuestionDraft={templateQuestionDraft}
+                templateQuestionSequenceError={templateQuestionSequenceError}
+                templateQuestionSequenceLimit={templateQuestionSequenceLimit}
+                canSaveTemplateQuestion={canSaveTemplateQuestion}
                 templateQuestionSiteOptions={templateQuestionSiteOptions}
                 onTemplateQuestionDraftChange={(changes) => {
                   setTemplateQuestionDraft((current) => ({ ...current, ...changes }));
@@ -3449,7 +3651,7 @@ export default function App() {
               aria-label={t('home')}
               onClick={() => { requestQuestionNavigation(() => goPlans()); }}
             />
-            {hasTemplateAccess() && (
+            {hasTemplateLibraryAccess && (
               <Button
                 appearance={view === 'template-library' ? 'primary' : 'subtle'}
                 icon={<DocumentMultiple24Regular />}
@@ -3740,9 +3942,9 @@ export default function App() {
           <div className={styles.templatePickerLayout}>
             <Field label="Template Checklist" required>
               <SearchableCombobox
-                disabled={loading || templateRows.length === 0}
+                disabled={loading || pickerTemplateRows.length === 0}
                 noOptionsLabel="No template checklists available"
-                options={templateRows.map((template) => ({ value: template.id, label: template.name }))}
+                options={pickerTemplateRows.map((template) => ({ value: template.id, label: template.name }))}
                 placeholder="Search and select a template checklist"
                 selectedValue={effectiveSelectedTemplateId || undefined}
                 onSelect={(value) => {
@@ -3757,7 +3959,7 @@ export default function App() {
               <div className={styles.templatePickerMeta}>
                 <Text weight="semibold">{selectedTemplate.name}</Text>
                 <Caption1 className={styles.helperText}>
-                  {selectedTemplate.disciplineLabel ?? 'No discipline'} | {selectedTemplate.siteLabel ?? 'No site'}
+                  {selectedTemplate.disciplineLabel ?? 'No discipline'} | {getTemplateScopeLabel(selectedTemplate)}
                 </Caption1>
                 <Caption1 className={styles.helperText}>
                   {selectedTemplate.description ?? 'No description provided.'}
@@ -3775,17 +3977,17 @@ export default function App() {
               <Text>{templateQuestionsError}</Text>
             )}
 
-            {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && templateQuestions.length === 0 && (
+            {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && visibleTemplateQuestions.length === 0 && (
               <Text className={styles.helperText}>This template does not have any associated questions yet.</Text>
             )}
 
-            {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && templateQuestions.length > 0 && (
+            {selectedTemplate && !templateQuestionsLoading && !templateQuestionsError && visibleTemplateQuestions.length > 0 && (
               <div className={styles.templateQuestionPanel}>
                 <div className={styles.templateQuestionList}>
-                  {templateQuestions.map((question) => (
+                  {orderTemplateQuestionsForPlanCopy(visibleTemplateQuestions, selectedPlan).map((question) => (
                     <Card key={question.id} className={styles.templateQuestionCard} size="small">
                       <Text weight="semibold" className={styles.templateQuestionTitle}>{question.sequenceOrder}. {question.questionText}</Text>
-                      <Caption1 className={styles.helperText}>{question.isMandatory ? 'Required question' : 'Optional question'}</Caption1>
+                      <Caption1 className={styles.helperText}>{question.isMandatory ? 'Required question' : 'Optional question'} | {getTemplateScopeLabel(question)}</Caption1>
                     </Card>
                   ))}
                 </div>

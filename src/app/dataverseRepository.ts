@@ -53,6 +53,19 @@ import type {
   TemplateChecklistVm,
   TemplateQuestionVm,
 } from './types';
+import {
+  canCreateTemplateChecklist,
+  canCreateTemplateQuestion,
+  canDeleteTemplateChecklist,
+  canDeleteTemplateQuestion,
+  canEditTemplateChecklist,
+  canEditTemplateQuestion,
+  getTemplateAccessDeniedMessage,
+  getTemplateReadonlyMessage,
+  orderTemplateQuestionsForPlanCopy,
+  resolveTemplateChecklistWriteSiteCode,
+  resolveTemplateQuestionWriteSiteCode,
+} from './templateAccess';
 import { getClient } from '@microsoft/power-apps/data';
 import { dataSourcesInfo } from '../../.power/schemas/appschemas/dataSourcesInfo';
 
@@ -731,7 +744,9 @@ export async function getCurrentUserProfile(criteria: {
     systemUserId: normalizeGuid(matchedUser.systemuserid),
     fullName: matchedUser.fullname?.trim() || criteria.fallbackFullName?.trim() || 'Unknown user',
     userPrincipalName: matchedUser.internalemailaddress?.trim() || criteria.userPrincipalName?.trim() || '',
+    roleCode: matchedUser.crc07_role,
     roleLabel: matchedUser.crc07_rolename ?? lookupName(Systemuserscrc07_role, matchedUser.crc07_role),
+    siteCode: matchedUser.crc07_site,
     siteLabel: matchedUser.crc07_sitename ?? lookupName(Systemuserscrc07_site, matchedUser.crc07_site),
   };
 }
@@ -1389,18 +1404,79 @@ export async function getTemplateQuestions(templateChecklistId: string): Promise
       sequenceOrder: item.crc07_sequenceorder ?? 0,
       isMandatory: Boolean(item.crc07_ismandatory),
       siteCode: item.crc07_site as number | undefined,
+      siteLabel: lookupName(Crc07_pssr_template_questionscrc07_site, item.crc07_site as number | undefined),
     }));
+}
+
+async function getTemplateChecklistById(templateChecklistId: string): Promise<TemplateChecklistVm> {
+  const result = await withReadTimeout(
+    Crc07_pssr_template_checklistsService.get(normalizeGuid(templateChecklistId), {
+      select: [
+        'crc07_pssr_template_checklistid',
+        'crc07_templatechecklistname',
+        'crc07_description',
+        'crc07_discipline',
+        'crc07_site',
+        'statecode',
+      ],
+    }),
+    'Timed out loading template checklist from Dataverse.',
+  );
+
+  const item = getResultData(result, 'Loading template checklist from Dataverse');
+  return {
+    id: normalizeGuid(item.crc07_pssr_template_checklistid),
+    name: item.crc07_templatechecklistname,
+    disciplineCode: item.crc07_discipline as number | undefined,
+    disciplineLabel: lookupName(Crc07_pssr_template_checklistscrc07_discipline, item.crc07_discipline as number | undefined),
+    siteCode: item.crc07_site as number | undefined,
+    siteLabel: lookupName(Crc07_pssr_template_checklistscrc07_site, item.crc07_site as number | undefined),
+    description: item.crc07_description,
+    statusLabel: item.statecode === 0 ? 'Active' : 'Inactive',
+    questionCount: 0,
+  };
+}
+
+async function getTemplateQuestionById(questionId: string): Promise<TemplateQuestionVm> {
+  const result = await withReadTimeout(
+    Crc07_pssr_template_questionsService.get(normalizeGuid(questionId), {
+      select: [
+        'crc07_pssr_template_questionid',
+        'crc07_questiontext',
+        'crc07_sequenceorder',
+        'crc07_ismandatory',
+        'crc07_site',
+        '_crc07_templatechecklist_value',
+      ],
+    }),
+    'Timed out loading template question from Dataverse.',
+  );
+
+  const item = getResultData(result, 'Loading template question from Dataverse');
+  return {
+    id: normalizeGuid(item.crc07_pssr_template_questionid),
+    templateChecklistId: normalizeGuid(item._crc07_templatechecklist_value),
+    questionText: item.crc07_questiontext,
+    sequenceOrder: item.crc07_sequenceorder ?? 0,
+    isMandatory: Boolean(item.crc07_ismandatory),
+    siteCode: item.crc07_site as number | undefined,
+    siteLabel: lookupName(Crc07_pssr_template_questionscrc07_site, item.crc07_site as number | undefined),
+  };
 }
 
 export async function createTemplateChecklist(payload: {
   name: string;
   disciplineCode?: number;
   siteCode?: number;
-}): Promise<string> {
+}, currentUser?: CurrentUserProfileVm): Promise<string> {
+  if (!canCreateTemplateChecklist(currentUser)) {
+    throw new Error(getTemplateAccessDeniedMessage());
+  }
+
   const createPayload = {
     crc07_templatechecklistname: payload.name,
     crc07_discipline: payload.disciplineCode as never,
-    crc07_site: payload.siteCode as never,
+    crc07_site: resolveTemplateChecklistWriteSiteCode(currentUser, payload.siteCode) as never,
   };
 
   const result = await withMutationRetry(async () => {
@@ -1416,17 +1492,27 @@ export async function updateTemplateChecklist(templateChecklistId: string, paylo
   name?: string;
   disciplineCode?: number;
   siteCode?: number;
-}): Promise<void> {
+}, currentUser?: CurrentUserProfileVm): Promise<void> {
+  const existingTemplate = await getTemplateChecklistById(templateChecklistId);
+  if (!canEditTemplateChecklist(currentUser, existingTemplate)) {
+    throw new Error(getTemplateReadonlyMessage(currentUser, existingTemplate) ?? getTemplateAccessDeniedMessage());
+  }
+
   await withMutationRetry(async () => {
     await Crc07_pssr_template_checklistsService.update(templateChecklistId, {
       crc07_templatechecklistname: payload.name,
       crc07_discipline: payload.disciplineCode as never,
-      crc07_site: payload.siteCode as never,
+      crc07_site: resolveTemplateChecklistWriteSiteCode(currentUser, payload.siteCode, existingTemplate.siteCode) as never,
     });
   });
 }
 
-export async function deleteTemplateChecklist(templateChecklistId: string): Promise<void> {
+export async function deleteTemplateChecklist(templateChecklistId: string, currentUser?: CurrentUserProfileVm): Promise<void> {
+  const existingTemplate = await getTemplateChecklistById(templateChecklistId);
+  if (!canDeleteTemplateChecklist(currentUser, existingTemplate)) {
+    throw new Error(getTemplateReadonlyMessage(currentUser, existingTemplate) ?? getTemplateAccessDeniedMessage());
+  }
+
   const relatedQuestions = await getTemplateQuestions(templateChecklistId);
 
   for (const question of relatedQuestions) {
@@ -1446,12 +1532,17 @@ export async function createTemplateQuestion(payload: {
   sequenceOrder?: number;
   isMandatory?: boolean;
   siteCode?: number;
-}): Promise<string> {
+}, currentUser?: CurrentUserProfileVm): Promise<string> {
+  const templateChecklist = await getTemplateChecklistById(payload.templateChecklistId);
+  if (!canCreateTemplateQuestion(currentUser, templateChecklist)) {
+    throw new Error(getTemplateReadonlyMessage(currentUser, templateChecklist) ?? getTemplateAccessDeniedMessage());
+  }
+
   const createPayload = {
     crc07_questiontext: payload.questionText,
     crc07_sequenceorder: payload.sequenceOrder,
     crc07_ismandatory: payload.isMandatory,
-    crc07_site: payload.siteCode as never,
+    crc07_site: resolveTemplateQuestionWriteSiteCode(currentUser, payload.siteCode, templateChecklist.siteCode) as never,
     'crc07_TemplateChecklist@odata.bind': `/crc07_pssr_template_checklists(${normalizeGuid(payload.templateChecklistId)})`,
   };
 
@@ -1469,25 +1560,45 @@ export async function updateTemplateQuestion(questionId: string, payload: {
   sequenceOrder?: number;
   isMandatory?: boolean;
   siteCode?: number;
-}): Promise<void> {
+}, currentUser?: CurrentUserProfileVm): Promise<void> {
+  const existingQuestion = await getTemplateQuestionById(questionId);
+  const templateChecklist = await getTemplateChecklistById(existingQuestion.templateChecklistId ?? '');
+  if (!canEditTemplateQuestion(currentUser, templateChecklist, existingQuestion)) {
+    throw new Error(getTemplateReadonlyMessage(currentUser, templateChecklist) ?? getTemplateAccessDeniedMessage());
+  }
+
   await withMutationRetry(async () => {
     await Crc07_pssr_template_questionsService.update(questionId, {
       crc07_questiontext: payload.questionText,
       crc07_sequenceorder: payload.sequenceOrder,
       crc07_ismandatory: payload.isMandatory,
-      crc07_site: payload.siteCode as never,
+      crc07_site: resolveTemplateQuestionWriteSiteCode(currentUser, payload.siteCode, existingQuestion.siteCode) as never,
     });
   });
 }
 
-export async function deleteTemplateQuestion(questionId: string): Promise<void> {
+export async function deleteTemplateQuestion(questionId: string, currentUser?: CurrentUserProfileVm): Promise<void> {
+  const existingQuestion = await getTemplateQuestionById(questionId);
+  const templateChecklist = await getTemplateChecklistById(existingQuestion.templateChecklistId ?? '');
+  if (!canDeleteTemplateQuestion(currentUser, templateChecklist, existingQuestion)) {
+    throw new Error(getTemplateReadonlyMessage(currentUser, templateChecklist) ?? getTemplateAccessDeniedMessage());
+  }
+
   await withMutationRetry(async () => {
     await Crc07_pssr_template_questionsService.delete(questionId);
   });
 }
 
-export async function resequenceTemplateQuestions(questionIdsInOrder: string[]): Promise<void> {
+export async function resequenceTemplateQuestions(questionIdsInOrder: string[], currentUser?: CurrentUserProfileVm): Promise<void> {
   for (let index = 0; index < questionIdsInOrder.length; index += 1) {
+    if (currentUser) {
+      const existingQuestion = await getTemplateQuestionById(questionIdsInOrder[index]);
+      const templateChecklist = await getTemplateChecklistById(existingQuestion.templateChecklistId ?? '');
+      if (!canEditTemplateQuestion(currentUser, templateChecklist, existingQuestion)) {
+        throw new Error(getTemplateReadonlyMessage(currentUser, templateChecklist) ?? getTemplateAccessDeniedMessage());
+      }
+    }
+
     await withMutationRetry(async () => {
       await Crc07_pssr_template_questionsService.update(questionIdsInOrder[index], {
         crc07_sequenceorder: index + 1,
@@ -1496,28 +1607,43 @@ export async function resequenceTemplateQuestions(questionIdsInOrder: string[]):
   }
 }
 
-export async function copyTemplatesToPlan(planId: string, templateChecklistIds: string[]): Promise<void> {
-  const allTemplateQuestions = await Crc07_pssr_template_questionsService.getAll({
-    select: [
-      'crc07_questiontext',
-      'crc07_sequenceorder',
-      'crc07_ismandatory',
-      '_crc07_templatechecklist_value',
-    ],
-    top: 5000,
-  });
+export async function copyTemplatesToPlan(
+  planId: string,
+  templateChecklistIds: string[],
+  planSite?: { siteCode?: number; siteLabel?: string },
+): Promise<void> {
+  const allTemplateQuestions = await readDataverseRows(
+    Crc07_pssr_template_questionsService.getAll({
+      select: [
+        'crc07_pssr_template_questionid',
+        'crc07_questiontext',
+        'crc07_sequenceorder',
+        'crc07_ismandatory',
+        'crc07_site',
+        '_crc07_templatechecklist_value',
+      ],
+      top: 5000,
+    }),
+    'Timed out loading template questions for plan copy from Dataverse.',
+    'Loading template questions for plan copy',
+  );
 
-  const templates = await Crc07_pssr_template_checklistsService.getAll({
-    select: [
-      'crc07_pssr_template_checklistid',
-      'crc07_templatechecklistname',
-      'crc07_discipline',
-    ],
-    top: 5000,
-  });
+  const templates = await readDataverseRows(
+    Crc07_pssr_template_checklistsService.getAll({
+      select: [
+        'crc07_pssr_template_checklistid',
+        'crc07_templatechecklistname',
+        'crc07_discipline',
+        'crc07_site',
+      ],
+      top: 5000,
+    }),
+    'Timed out loading template checklists for plan copy from Dataverse.',
+    'Loading template checklists for plan copy',
+  );
 
   const selectedSet = new Set(templateChecklistIds.map((id) => normalizeGuid(id)));
-  const selectedTemplates = (templates.data ?? []).filter((template) => selectedSet.has(normalizeGuid(template.crc07_pssr_template_checklistid)));
+  const selectedTemplates = templates.filter((template) => selectedSet.has(normalizeGuid(template.crc07_pssr_template_checklistid)));
 
   for (const template of selectedTemplates) {
     const checklistId = await createChecklistFromPlan(planId, {
@@ -1527,15 +1653,24 @@ export async function copyTemplatesToPlan(planId: string, templateChecklistIds: 
     });
 
     const templateId = normalizeGuid(template.crc07_pssr_template_checklistid);
-    const questions = (allTemplateQuestions.data ?? [])
+    const questions = allTemplateQuestions
       .filter((question) => normalizeGuid(question._crc07_templatechecklist_value) === templateId)
-      .sort((a, b) => (a.crc07_sequenceorder ?? 0) - (b.crc07_sequenceorder ?? 0));
+      .map((question) => ({
+        id: normalizeGuid(question.crc07_pssr_template_questionid),
+        templateChecklistId: templateId,
+        questionText: question.crc07_questiontext,
+        sequenceOrder: question.crc07_sequenceorder ?? 0,
+        isMandatory: Boolean(question.crc07_ismandatory),
+        siteCode: question.crc07_site as number | undefined,
+        siteLabel: lookupName(Crc07_pssr_template_questionscrc07_site, question.crc07_site as number | undefined),
+      }));
+    const orderedQuestions = orderTemplateQuestionsForPlanCopy(questions, planSite);
 
-    for (const question of questions) {
+    for (const question of orderedQuestions) {
       const createPayload = {
-        crc07_questiontext: question.crc07_questiontext,
-        crc07_ismandatory: question.crc07_ismandatory,
-        crc07_sequenceorder: question.crc07_sequenceorder,
+        crc07_questiontext: question.questionText,
+        crc07_ismandatory: question.isMandatory,
+        crc07_sequenceorder: question.sequenceOrder,
         'crc07_RelatedChecklist@odata.bind': `/crc07_pssr_checklists(${checklistId})`,
       };
 

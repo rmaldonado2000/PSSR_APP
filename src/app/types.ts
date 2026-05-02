@@ -4,7 +4,9 @@ export interface CurrentUserProfileVm {
   systemUserId?: string;
   fullName: string;
   userPrincipalName: string;
+  roleCode?: number;
   roleLabel?: string;
+  siteCode?: number;
   siteLabel?: string;
 }
 
@@ -134,4 +136,5 @@ export interface TemplateQuestionVm {
   sequenceOrder: number;
   isMandatory: boolean;
   siteCode?: number;
+  siteLabel?: string;
 }
