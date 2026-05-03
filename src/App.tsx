@@ -95,7 +95,6 @@ import { t } from './app/i18n';
 import { formatRoleLabel } from './app/format';
 import { type ChecklistDetailsTab, type AppRouteTab, type PlanDetailsTab, parseHashRoute, updateHashRoute } from './app/router';
 import {
-  canCreateTemplateChecklist,
   canCreateTemplateQuestion,
   canDeleteTemplateChecklist,
   canDeleteTemplateQuestion,
@@ -968,7 +967,6 @@ export default function App() {
   const [error, setError] = useState<string>('');
   const [bannerMessage, setBannerMessage] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<CurrentUserProfileVm>();
-  const [currentUserResolved, setCurrentUserResolved] = useState<boolean>(false);
   const [isMobileUserDetailsOpen, setIsMobileUserDetailsOpen] = useState<boolean>(false);
 
   const [plans, setPlans] = useState<PlanVm[]>([]);
@@ -1401,10 +1399,6 @@ export default function App() {
           });
           trackError('app.context.load', contextError);
         }
-      } finally {
-        if (!isCancelled) {
-          setCurrentUserResolved(true);
-        }
       }
     };
 
@@ -1785,16 +1779,11 @@ export default function App() {
   }, [goPlans, loadPlanChildren, planTab, selectedPlan, syncHash]);
 
   const goTemplateLibrary = useCallback((replace = false) => {
-    if (!userHasTemplateAccess(currentUser)) {
-      goPlans(replace);
-      setBannerMessage(getTemplateAccessDeniedMessage());
-      return;
-    }
-
     setError('');
+    setBannerMessage('');
     setView('template-library');
     syncHash('template-library', selectedPlan?.id, undefined, undefined, replace);
-  }, [currentUser, goPlans, selectedPlan, syncHash]);
+  }, [selectedPlan, syncHash]);
 
   const syncCurrentRoute = useCallback((replace = true) => {
     const routeTab = view === 'plan-details'
@@ -1859,12 +1848,6 @@ export default function App() {
     }
 
     if (route.view === 'template-library') {
-      if (currentUserResolved && !userHasTemplateAccess(currentUser)) {
-        goPlans(true);
-        setBannerMessage(getTemplateAccessDeniedMessage());
-        return;
-      }
-
       goTemplateLibrary(true);
       return;
     }
@@ -1890,20 +1873,16 @@ export default function App() {
           await openChecklist(matchedPlan, matchedChecklist, false, true, (route.tab as ChecklistDetailsTab | undefined) ?? 'questions');
       }
     }
-  }, [currentUser, currentUserResolved, goPlans, goTemplateLibrary, openChecklist, openPlan, plans]);
+  }, [goPlans, goTemplateLibrary, openChecklist, openPlan, plans]);
 
   const onOpenTemplateChecklistModal = useCallback((template?: TemplateChecklistVm) => {
-    if (!template && !canCreateTemplateChecklist(currentUser)) {
-      setBannerMessage(getTemplateAccessDeniedMessage());
-      return;
-    }
-
     if (template && !canEditTemplateChecklist(currentUser, template)) {
-      setBannerMessage(getTemplateReadonlyMessage(currentUser, template) ?? getTemplateAccessDeniedMessage());
+      setBannerMessage(getTemplateReadonlyMessage(currentUser, template) ?? '');
       return;
     }
 
     setError('');
+    setBannerMessage('');
     setTemplateChecklistDraft({
       ...createTemplateChecklistDraft(template),
       siteCode: getDefaultTemplateChecklistSiteCode(currentUser, template),
@@ -1922,12 +1901,12 @@ export default function App() {
     }
 
     if (!question && !canCreateTemplateQuestion(currentUser, selectedTemplate)) {
-      setBannerMessage(getTemplateReadonlyMessage(currentUser, selectedTemplate) ?? getTemplateAccessDeniedMessage());
+      setBannerMessage(getTemplateReadonlyMessage(currentUser, selectedTemplate) ?? '');
       return;
     }
 
     if (question && !canEditTemplateQuestion(currentUser, selectedTemplate, question)) {
-      setBannerMessage(getTemplateReadonlyMessage(currentUser, selectedTemplate) ?? getTemplateAccessDeniedMessage());
+      setBannerMessage(getTemplateReadonlyMessage(currentUser, selectedTemplate) ?? '');
       return;
     }
 
@@ -2064,12 +2043,8 @@ export default function App() {
   }, [currentUser, onCloseTemplateChecklistEditor, refreshTemplateLibrary, templateChecklistDraft]);
 
   const onDuplicateTemplateChecklist = useCallback((template: TemplateChecklistVm) => {
-    if (!canDuplicateTemplateChecklist(currentUser)) {
-      setBannerMessage(getTemplateAccessDeniedMessage());
-      return;
-    }
-
     setError('');
+    setBannerMessage('');
     setTemplateChecklistDraft({
       id: undefined,
       name: `${template.name} Copy`,
@@ -2266,21 +2241,6 @@ export default function App() {
       isCancelled = true;
     };
   }, [goPlans, loadPlans, loadTemplatesWithStartupRetry, openChecklist, openPlan]);
-
-  useEffect(() => {
-    if (!currentUserResolved || view !== 'template-library' || userHasTemplateAccess(currentUser)) {
-      return;
-    }
-
-    const timerId = window.setTimeout(() => {
-      goPlans(true);
-      setBannerMessage(getTemplateAccessDeniedMessage());
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timerId);
-    };
-  }, [currentUser, currentUserResolved, goPlans, view]);
 
   useEffect(() => {
     if (!initialRouteAppliedRef.current) {
@@ -3581,14 +3541,12 @@ export default function App() {
                 loading={loading}
                 error={error}
                 hasSelectedPlan={Boolean(selectedPlan)}
-                canCreateTemplateChecklist={canCreateTemplateChecklist(currentUser)}
                 canCreateTemplateQuestion={Boolean(selectedTemplate && canCreateTemplateQuestion(currentUser, selectedTemplate))}
                 canEditTemplateChecklist={(template) => canEditTemplateChecklist(currentUser, template)}
                 canDuplicateTemplateChecklist={() => canDuplicateTemplateChecklist(currentUser)}
                 canDeleteTemplateChecklist={(template) => canDeleteTemplateChecklist(currentUser, template)}
                 canEditTemplateQuestion={(question) => Boolean(selectedTemplate && canEditTemplateQuestion(currentUser, selectedTemplate, question))}
                 canDeleteTemplateQuestion={(question) => Boolean(selectedTemplate && canDeleteTemplateQuestion(currentUser, selectedTemplate, question))}
-                templateChecklistActionTitle={selectedTemplateReadonlyMessage ?? getTemplateAccessDeniedMessage()}
                 templateQuestionActionTitle={selectedTemplateReadonlyMessage ?? getTemplateAccessDeniedMessage()}
                 selectedTemplateBanner={selectedTemplateReadonlyMessage}
                 createTemplateQuestionLabel={templateQuestionCreateLabel}

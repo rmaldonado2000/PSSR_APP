@@ -1,3 +1,4 @@
+import { Systemuserscrc07_role } from '../generated/models/SystemusersModel';
 import type { CurrentUserProfileVm, TemplateChecklistVm, TemplateQuestionVm } from './types';
 
 type SiteScope = {
@@ -14,6 +15,18 @@ export interface TemplateAccessContext extends SiteScope {
 
 function normalizeLabelKey(value?: string): string {
   return (value ?? '').trim().replace(/[\s_-]+/g, '').toLowerCase();
+}
+
+function resolveRoleKey(user?: CurrentUserProfileVm): string {
+  if (user?.roleLabel?.trim()) {
+    return normalizeLabelKey(user.roleLabel);
+  }
+
+  if (user?.roleCode !== undefined) {
+    return normalizeLabelKey(Systemuserscrc07_role[user.roleCode as keyof typeof Systemuserscrc07_role]);
+  }
+
+  return '';
 }
 
 export function isEnterpriseSite(scope?: SiteScope): boolean {
@@ -33,7 +46,7 @@ export function isSameSiteScope(left?: SiteScope, right?: SiteScope): boolean {
 }
 
 export function getTemplateAccessContext(user?: CurrentUserProfileVm): TemplateAccessContext {
-  const roleKey = normalizeLabelKey(user?.roleLabel);
+  const roleKey = resolveRoleKey(user);
   const scope = {
     siteCode: user?.siteCode,
     siteLabel: user?.siteLabel,

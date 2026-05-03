@@ -54,7 +54,6 @@ import type {
   TemplateQuestionVm,
 } from './types';
 import {
-  canCreateTemplateChecklist,
   canCreateTemplateQuestion,
   canDeleteTemplateChecklist,
   canDeleteTemplateQuestion,
@@ -1469,10 +1468,6 @@ export async function createTemplateChecklist(payload: {
   disciplineCode?: number;
   siteCode?: number;
 }, currentUser?: CurrentUserProfileVm): Promise<string> {
-  if (!canCreateTemplateChecklist(currentUser)) {
-    throw new Error(getTemplateAccessDeniedMessage());
-  }
-
   const createPayload = {
     crc07_templatechecklistname: payload.name,
     crc07_discipline: payload.disciplineCode as never,
