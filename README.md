@@ -27,6 +27,23 @@ npm run test
 
 If PowerShell execution policy blocks npm on this machine, use `npm.cmd` instead.
 
+## Security & Compliance (Code App)
+
+This repo enforces cybersecurity requirements for Code App source code and artifacts.
+
+Required policy files:
+- `.github/copilot-instructions.md` (mandatory Copilot rules)
+- `.github/pull_request_template.md` (PR compliance gate)
+- `.github/security.md` (vulnerability handling and reporting policy)
+- `docs/cybersecurity-compliance.md` (code-level compliance binder)
+- `docs/security-release-process.md` (release evidence, scan review, and exception workflow)
+- `docs/copilot-context.md` (app-specific verified repo context)
+
+Non-negotiables:
+- No secrets or credentials in source code or repo artifacts.
+- Do not bypass code/dependency/secret scanning or branch protections.
+- Vulnerability findings must be remediated or explicitly documented as an approved exception.
+
 ## Project Architecture
 
 The application follows a thin-UI, service-oriented client architecture:

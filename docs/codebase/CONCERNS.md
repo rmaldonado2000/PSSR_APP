@@ -7,7 +7,7 @@
 | Severity | Concern | Evidence | Impact | Suggested action |
 |----------|---------|----------|--------|------------------|
 | high | `src/App.tsx` is a large, central, stateful composition root and the top churn file in the last 90 days | src/App.tsx; terminal `git log --since=...` output | Cross-screen changes are likely to create regressions and make ownership boundaries harder to preserve | Extract stable slices behind hooks/components gradually and add behavior-scoped tests before large edits |
-| high | The handwritten data-access layer lives in `src/app/dataverseRepository.ts`, while repo rules say data access should be in `src/services/**` | .github/copilot-instructions.md; .github/instructions/services-layer.instructions.md; src/app/dataverseRepository.ts | Architecture guidance and actual layout diverge, which raises onboarding and consistency risk | [ASK USER] decide whether the current repository path is acceptable or should be migrated to a services path |
+| high | The handwritten data-access layer lives in `src/app/dataverseRepository.ts`, while some architecture notes still imply a more service-sliced layout | .github/copilot-instructions.md; docs/codebase/ARCHITECTURE.md; src/app/dataverseRepository.ts | Architecture guidance and actual layout can be read inconsistently, which raises onboarding and consistency risk | [ASK USER] decide whether the current repository path is acceptable or should be documented as the long-term pattern |
 | medium | Client-side lifecycle and template-access checks are present, but server-side enforcement beyond Dataverse permissions is not confirmed in repo docs | docs/copilot-context.md; src/app/templateAccess.ts; src/app/lifecycle.ts | If Dataverse security does not mirror app rules, users may see inconsistent or bypassable behavior | Verify Dataverse security roles/table permissions against client assumptions |
 | medium | Telemetry emits arbitrary payloads to `console.info` and no redaction layer was found | src/app/telemetry.ts; .github/copilot-instructions.md | Callers can accidentally log user or record context that the repo rules say should not be exposed | Add a safe telemetry contract or payload scrubber before introducing external logging |
 
@@ -63,4 +63,3 @@
 - src/app/templateAccess.test.ts
 - docs/copilot-context.md
 - .github/copilot-instructions.md
-- .github/instructions/services-layer.instructions.md
