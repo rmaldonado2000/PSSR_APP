@@ -168,7 +168,11 @@ const useStyles = makeStyles({
     flexWrap: 'nowrap',
     minWidth: 0,
     '@media (max-width: 700px)': {
-      gap: tokens.spacingHorizontalXS,
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+      alignItems: 'flex-start',
+      columnGap: tokens.spacingHorizontalXS,
+      gap: tokens.spacingVerticalXS,
     },
   },
   titleStack: {
@@ -176,6 +180,9 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalXXS,
     flex: '1 1 auto',
     minWidth: 0,
+    '@media (max-width: 700px)': {
+      width: '100%',
+    },
   },
   titleText: {
     whiteSpace: 'normal',
@@ -183,21 +190,31 @@ const useStyles = makeStyles({
     wordBreak: 'break-word',
   },
   rightCluster: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
     alignItems: 'flex-start',
     justifyContent: 'flex-end',
-    gap: tokens.spacingHorizontalXS,
-    flex: '0 0 auto',
+    columnGap: tokens.spacingHorizontalXS,
+    rowGap: tokens.spacingVerticalXXS,
+    flex: '0 1 52%',
+    maxWidth: '52%',
     minWidth: 0,
     marginLeft: 'auto',
+    '@media (max-width: 700px)': {
+      width: '100%',
+      maxWidth: '100%',
+      marginLeft: 0,
+      columnGap: tokens.spacingHorizontalXXS,
+    },
   },
   headerPills: {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'flex-end',
     gap: tokens.spacingHorizontalXS,
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     minWidth: 0,
+    maxWidth: '100%',
     '@media (max-width: 700px)': {
       gap: tokens.spacingHorizontalXXS,
     },
@@ -208,6 +225,17 @@ const useStyles = makeStyles({
     alignItems: 'center',
     flexWrap: 'wrap',
     minWidth: 0,
+    '@media (max-width: 700px)': {
+      gap: tokens.spacingHorizontalXXS,
+      flexWrap: 'nowrap',
+      overflow: 'hidden',
+    },
+  },
+  secondaryPillItem: {
+    minWidth: 0,
+    '@media (max-width: 700px)': {
+      flex: '1 1 0',
+    },
   },
   questionsPanel: {
     padding: tokens.spacingHorizontalM,
@@ -498,6 +526,20 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
               <div className={styles.listStack}>
               {props.templateRows.map((template) => {
                 const selectedForDetail = props.selectedTemplateId === template.id;
+                const templateActionTrigger = (
+                  <div className={styles.menuTriggerShell} data-template-action-root="true">
+                    <Button
+                      appearance="subtle"
+                      aria-label={`Open actions for ${template.name}`}
+                      icon={<MoreHorizontal24Regular />}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openActionMenu(event, 'template', template.id);
+                      }}
+                    />
+                  </div>
+                );
+
                 return (
                   <div
                     key={template.id}
@@ -522,26 +564,25 @@ export default function TemplateLibraryScreen(props: TemplateLibraryScreenProps)
                           <div className={styles.titleStack}>
                             <Text weight="semibold" className={styles.titleText}>{template.name}</Text>
                           </div>
-                          <div className={styles.rightCluster}>
-                            <div className={styles.headerPills}>
-                              <Pill kind="neutral" value={template.disciplineLabel ?? 'No discipline'} icon={<Tag16Regular />} />
-                              <Pill kind="neutral" value={template.siteLabel ?? 'No Site'} icon={<Location16Regular />} />
+                          {isMobileLayout && templateActionTrigger}
+                          {!isMobileLayout && (
+                            <div className={styles.rightCluster}>
+                              <div className={styles.headerPills}>
+                                <Pill kind="neutral" value={template.disciplineLabel ?? 'No discipline'} icon={<Tag16Regular />} />
+                                <Pill kind="neutral" value={template.siteLabel ?? 'No Site'} icon={<Location16Regular />} />
+                              </div>
+                              {templateActionTrigger}
                             </div>
-                            <div className={styles.menuTriggerShell} data-template-action-root="true">
-                                <Button
-                                  appearance="subtle"
-                                  aria-label={`Open actions for ${template.name}`}
-                                  icon={<MoreHorizontal24Regular />}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openActionMenu(event, 'template', template.id);
-                                  }}
-                                />
-                            </div>
-                          </div>
+                          )}
                         </div>
                         <div className={styles.secondaryPills}>
-                          <Pill kind="neutral" value={`${template.questionCount} ${template.questionCount === 1 ? 'question' : 'questions'}`} />
+                          {isMobileLayout && (
+                            <>
+                              <Pill className={styles.secondaryPillItem} kind="neutral" value={template.disciplineLabel ?? 'No discipline'} icon={<Tag16Regular />} />
+                              <Pill className={styles.secondaryPillItem} kind="neutral" value={template.siteLabel ?? 'No Site'} icon={<Location16Regular />} />
+                            </>
+                          )}
+                          <Pill className={styles.secondaryPillItem} kind="neutral" value={`${template.questionCount} ${template.questionCount === 1 ? 'question' : 'questions'}`} />
                         </div>
                       </div>
                     </Card>

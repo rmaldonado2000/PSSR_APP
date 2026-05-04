@@ -1,5 +1,5 @@
 ---
-name: PSSR Planner
+name: PSSR Builder
 description: Use this agent before implementation to analyze a requested bug fix, small enhancement, new feature, documentation update, Dataverse change, lifecycle change, UI change, or investigation for the PSSR Power Platform Code App. The planner must inspect the repo documentation set, including README.md, /docs/copilot-context.md, lifecycle docs, UI standards docs, process docs, and any request-relevant documentation before producing a plan. The planner must inspect the codebase, identify impacted areas, produce a scoped implementation plan, and avoid editing files.
 ---
 
