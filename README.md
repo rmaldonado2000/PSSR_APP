@@ -1,91 +1,228 @@
-# React + TypeScript + Vite
+# PSSR Management Code App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PSSR Management is a Power Apps Code App for managing pre-startup safety review plans, plan checklists, checklist questions, deficiencies, approvals, team assignments, and template libraries backed by Dataverse.
 
-It is preconfigured to work with Power Apps Code Apps.
+The app is built as a React single-page application and runs inside the Power Apps runtime, using generated Dataverse service clients plus a repository layer to keep UI code separate from connector access.
 
-Currently, two official plugins are available:
+## Technology Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React 19
+- TypeScript 5.9
+- Vite 7
+- Fluent UI React Components
+- Power Apps Code Apps SDK via `@microsoft/power-apps`
+- Power Apps Vite plugin via `@microsoft/power-apps-vite`
+- Dataverse generated models and service clients in `src/generated`
+- Vitest for unit tests
+- ESLint 9 for linting
 
-## React Compiler
+Primary package scripts:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## PSSR Scaffold Notes (Dataverse)
-
-- App scaffold is Dataverse-first and uses generated services in `src/generated/services` for reads/writes.
-- Screens included: Home/Plans, Plan Details (Checklists/Deficiencies/Approvals/Team), Checklist Details runner, Template Library, and Deficiency modal.
-- Template Library visibility is role-aware from `systemusers` (`crc07_role`) with developer bypass for `inspectiondigitalizationsvc@suncor.com`.
-- Lifecycle gates/approval blocking rules are intentionally not implemented in this scaffold.
-
-### DEV/Test Sample Data (Optional)
-
-- Only create sample records if the environment is empty.
-- Recommended minimum:
-  - 2 Plans with different Site/Type/Phase values.
-  - 2 Template Checklists and 4-8 Template Questions each.
-- Use the app flow to copy templates into a selected plan so plan-specific Checklist and Question rows are created in Dataverse.
-- Do not seed sample data in PROD.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run test
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+If PowerShell execution policy blocks npm on this machine, use `npm.cmd` instead.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Project Architecture
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The application follows a thin-UI, service-oriented client architecture:
+
+- Screen components render state and user interactions.
+- Shared app logic lives in `src/app`.
+- Dataverse access is centralized through generated services and the repository layer.
+- UI components do not call connectors or data sources directly.
+- Lifecycle rules, template access, routing, formatting, telemetry, and view models are kept out of the screens.
+
+High-level flow:
+
+```text
+Power Apps Host / Local Play
+        |
+        v
+ React App (App.tsx + screens)
+        |
+        v
+ Shared app layer (routing, lifecycle, template access, repository)
+        |
+        v
+ Generated Dataverse services and models
+        |
+        v
+ Dataverse tables
 ```
+
+Key runtime characteristics:
+
+- Entry point is `src/main.tsx`; `src/App.tsx` is the current composition root.
+- Routing is hash-based rather than React Router.
+- Initial load prioritizes plans, with template data fetched in the background afterward.
+- Standalone localhost sessions can redirect into Power Apps Local Play using `power.config.json`.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js with npm
+- Access to the target Power Apps / Dataverse environment
+- Power Apps Local Play support for running connector-backed scenarios locally
+
+### Install dependencies
+
+```bash
+npm install
+```
+
+Windows note:
+
+```bash
+npm.cmd install
+```
+
+### Start the app
+
+```bash
+npm run dev
+```
+
+The configured local app URL is `http://localhost:5173`.
+
+### Build for deployment
+
+```bash
+npm run build
+```
+
+The production build output is written to `dist/`, which is also the `buildPath` referenced by `power.config.json`.
+
+### Validate locally
+
+```bash
+npm run lint
+npm run test
+```
+
+## Project Structure
+
+```text
+src/
+  app/          Core app logic: routing, lifecycle, repository, types, i18n, telemetry
+  components/   Shared UI building blocks and responsive helpers
+  generated/    Generated Dataverse models and service clients
+  screens/      Top-level application screens
+  ui/tokens/    Shared styling tokens
+docs/           Behavior, schema, and UI reference documentation
+public/         Static assets
+```
+
+Current primary screens:
+
+- `PlansScreen`
+- `PlanDetailsScreen`
+- `ChecklistDetailsScreen`
+- `TemplateLibraryScreen`
+
+## Key Features
+
+- Plan gallery with search, filters, and responsive mobile behavior
+- Plan detail experience with tabs for details, checklists, deficiencies, approvals, and team
+- Checklist runner with staged question answering and checklist completion flow
+- Template library for checklist and question management
+- Role- and site-aware template access rules based on `systemusers`
+- Lifecycle transition enforcement for Draft, Plan, Execution, Approval, and Completion
+- Approval history handling aligned to Dataverse approval records
+- Deficiency tracking, categorization, and closeout workflow
+- Responsive UI conventions built on reusable Fluent UI-based components
+
+## Dataverse Model
+
+The app centers on these functional tables:
+
+- `crc07_pssr_plans`
+- `crc07_pssr_checklists`
+- `crc07_pssr_checklist_questions`
+- `crc07_pssr_deficiencies`
+- `crc07_pssr_approvals`
+- `crc07_pssr_team_members`
+- `crc07_pssr_template_checklists`
+- `crc07_pssr_template_questions`
+- `systemusers`
+
+Additional configured references are present in `power.config.json`, including project, MOC, and TA revision tables.
+
+See the detailed schema reference in [docs/pssr-lifecycle-schema.md](docs/pssr-lifecycle-schema.md).
+
+## Development Workflow
+
+- Develop the UI and client logic in VS Code with Vite.
+- Keep connector and Dataverse access in the repository or service layer rather than in screen components.
+- Use generated Dataverse clients from `src/generated` for data operations.
+- Validate behavior with focused unit tests in `src/app`.
+- Use the Power Apps host or Local Play for realistic connector-backed testing.
+
+Runtime and feature notes are documented in [docs/copilot-context.md](docs/copilot-context.md).
+
+## Coding Standards
+
+Project-specific expectations from `.github/copilot-instructions.md`:
+
+- UI components never call connectors or data sources directly.
+- All data access goes through a services layer or repository abstraction.
+- Services return typed results and normalize errors.
+- Follow strict TypeScript patterns and avoid `any`.
+- Prefer small composable components and hooks.
+- Do not place secrets, tokens, tenant IDs, endpoints, or credentials in code.
+
+Additional practical conventions seen in the codebase:
+
+- Reuse shared UI primitives from `src/components/ui.tsx`.
+- Keep lifecycle rules centralized in `src/app/lifecycle.ts` and `src/app/lifecycleTransitions.ts`.
+- Keep template access logic centralized in `src/app/templateAccess.ts`.
+
+## Testing
+
+The repository currently uses Vitest for unit coverage of core business rules.
+
+Tested areas include:
+
+- Lifecycle guards and transitions
+- Approval handling rules
+- Template access filtering and sequence validation
+
+Run the test suite with:
+
+```bash
+npm run test
+```
+
+Relevant examples:
+
+- `src/app/lifecycleTransitions.test.ts`
+- `src/app/templateAccess.test.ts`
+
+## Documentation
+
+Useful repo documentation:
+
+- [docs/copilot-context.md](docs/copilot-context.md)
+- [docs/pssr-lifecycle-behavior.md](docs/pssr-lifecycle-behavior.md)
+- [docs/pssr-lifecycle-schema.md](docs/pssr-lifecycle-schema.md)
+- [docs/ui-gallery-card-anatomy.md](docs/ui-gallery-card-anatomy.md)
+- [docs/ui-pill-standard.md](docs/ui-pill-standard.md)
+
+## Contributing
+
+When contributing:
+
+- Keep UI, business logic, and data access separated.
+- Add or update tests when changing lifecycle, approval, template access, or repository logic.
+- Preserve strict typing and avoid introducing `any`.
+- Prefer minimal, focused changes over broad refactors.
+- Follow the repository instructions in `.github/copilot-instructions.md`.
+
+## License
+
+No license file or explicit license declaration was identified in this repository. Add a license before distributing the project outside its current intended scope.
